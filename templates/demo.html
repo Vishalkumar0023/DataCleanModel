@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Demo — Data Pipeline</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Reusing iOS 26 Liquid Glass Design System from dashboard.html */
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.18);
+            --glass-bg-hover: rgba(255, 255, 255, 0.25);
+            --glass-border: rgba(255, 255, 255, 0.35);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+            --glass-blur: blur(60px) saturate(200%);
+            --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+            --text-primary: #fff;
+            --text-secondary: rgba(255, 255, 255, 0.75);
+            --text-tertiary: rgba(255, 255, 255, 0.5);
+            --accent: #007aff;
+            --success: #34c759;
+            --radius: 24px;
+            --radius-sm: 14px;
+            --separator: rgba(255, 255, 255, 0.15);
+        }
+
+        [data-theme="light"] {
+            --glass-bg: rgba(255, 255, 255, 0.55);
+            --glass-bg-hover: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.7);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+            --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+            --text-primary: #1c1c1e;
+            --text-secondary: rgba(0, 0, 0, 0.55);
+            --text-tertiary: rgba(0, 0, 0, 0.35);
+            --separator: rgba(0, 0, 0, 0.08);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display', sans-serif;
+            min-height: 100vh;
+            color: var(--text-primary);
+            overflow-x: hidden;
+            transition: color 0.4s;
+        }
+
+        .wallpaper {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background: radial-gradient(ellipse at 20% 20%, #f5af19 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, #f12711 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, #667eea 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, #764ba2 0%, transparent 50%),
+                linear-gradient(135deg, #f093fb 0%, #f5576c 25%, #4facfe 50%, #00f2fe 75%, #43e97b 100%);
+            background-size: 200% 200%;
+            animation: wallpaperShift 20s ease-in-out infinite;
+        }
+
+        [data-theme="dark"] .wallpaper {
+            background: radial-gradient(ellipse at 30% 30%, #1a1a4e 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 20%, #2d1b69 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, #0c3547 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 70%, #1e3c72 0%, transparent 60%),
+                linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            background-size: 200% 200%;
+        }
+
+        @keyframes wallpaperShift {
+
+            0%,
+            100% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+        }
+
+        /* Navbar */
+        .navbar {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border-radius: 18px;
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            padding: 0.625rem 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+            height: 54px;
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+            font-size: 1.0625rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .brand-icon {
+            width: 34px;
+            height: 34px;
+            background: var(--glass-bg);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        /* Layout */
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 6rem 1rem 2rem;
+            position: relative;
+            z-index: 10;
+        }
+
+        .page-title {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .page-title h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+        }
+
+        .page-title p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .tab-btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 50px;
+            border: none;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            background: rgba(0, 122, 255, 0.6);
+            color: white;
+            border-color: rgba(0, 122, 255, 0.5);
+        }
+
+        .tab-btn:hover:not(.active) {
+            background: var(--glass-bg-hover);
+            color: var(--text-primary);
+        }
+
+        /* Content Grid */
+        .demo-content {
+            display: none;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .demo-content.active {
+            display: grid;
+        }
+
+        @media(max-width: 768px) {
+            .demo-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Cards */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border-radius: var(--radius);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            padding: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border-radius: var(--radius-sm);
+            background: rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 1rem;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--accent);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin: 10px 0;
+        }
+
+        .btn-predict {
+            width: 100%;
+            padding: 1rem;
+            border-radius: var(--radius-sm);
+            border: none;
+            background: var(--accent);
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.1s;
+            margin-top: 1rem;
+        }
+
+        .btn-predict:active {
+            transform: scale(0.98);
+        }
+
+        .result-box {
+            text-align: center;
+            margin-top: 1.5rem;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--separator);
+        }
+
+        .result-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--success);
+            margin: 0.5rem 0;
+        }
+
+        .result-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+
+        .theme-btn {
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            cursor: pointer;
+            color: var(--text-primary);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wallpaper"></div>
+
+    <nav class="navbar">
+        <a href="/" class="navbar-brand">
+            <div class="brand-icon">🔬</div>
+            <span>Data Pipeline</span>
+        </a>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <a href="/" style="color: var(--text-secondary); text-decoration: none; font-weight: 500;">Home</a>
+            {% if user %}
+            <a href="/dashboard"
+                style="color: var(--text-secondary); text-decoration: none; font-weight: 500;">Dashboard</a>
+            {% endif %}
+            <button class="theme-btn" onclick="toggleTheme()" id="theme-btn">🌙</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="page-title">
+            <h1>Live Prediction Demo</h1>
+            <p>See our ML models in action across different industries</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('sales')">💰 Retail Sales</button>
+            <button class="tab-btn" onclick="switchTab('student')">🎓 Education</button>
+            <button class="tab-btn" onclick="switchTab('user')">👤 My Models</button>
+        </div>
+
+        <!-- Sales Demo -->
+        <div id="sales-demo" class="demo-content active">
+            <div class="glass-card">
+                <h3 style="margin-bottom: 1.5rem;">Input Parameters</h3>
+                <div class="form-group">
+                    <label>TV Ad Budget ($k)</label>
+                    <input type="range" id="tv_ad" min="0" max="300" value="150"
+                        oninput="updateVal('tv_val', this.value)">
+                    <div style="text-align: right; font-weight: 600;" id="tv_val">150</div>
+                </div>
+                <div class="form-group">
+                    <label>Radio Ad Budget ($k)</label>
+                    <input type="range" id="radio_ad" min="0" max="50" value="25"
+                        oninput="updateVal('radio_val', this.value)">
+                    <div style="text-align: right; font-weight: 600;" id="radio_val">25</div>
+                </div>
+                <div class="form-group">
+                    <label>Newspaper Ad Budget ($k)</label>
+                    <input type="range" id="news_ad" min="0" max="100" value="50"
+                        oninput="updateVal('news_val', this.value)">
+                    <div style="text-align: right; font-weight: 600;" id="news_val">50</div>
+                </div>
+                <button class="btn-predict" onclick="predictSales()">Predict Sales Revenue</button>
+            </div>
+
+            <div class="glass-card">
+                <h3>Prediction Result</h3>
+                <div class="result-box">
+                    <div class="result-label">Projected Sales</div>
+                    <div class="result-value" id="sales-result">--</div>
+                    <div class="result-label">Units (Thousands)</div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="salesChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Student Demo -->
+        <div id="student-demo" class="demo-content">
+            <div class="glass-card">
+                <h3 style="margin-bottom: 1.5rem;">Student Metrics</h3>
+                <div class="form-group">
+                    <label>Study Hours (Weekly)</label>
+                    <input type="range" id="study_hours" min="0" max="20" step="0.5" value="5"
+                        oninput="updateVal('study_val', this.value)">
+                    <div style="text-align: right; font-weight: 600;" id="study_val">5</div>
+                </div>
+                <div class="form-group">
+                    <label>Attendance (%)</label>
+                    <input type="range" id="attendance" min="0" max="100" value="75"
+                        oninput="updateVal('att_val', this.value)">
+                    <div style="text-align: right; font-weight: 600;" id="att_val">75</div>
+                </div>
+                <div class="form-group">
+                    <label>Previous Score</label>
+                    <input type="number" id="prev_score" class="form-control" value="70" min="0" max="100">
+                </div>
+                <button class="btn-predict" onclick="predictStudent()">Predict Final Grade</button>
+            </div>
+
+            <div class="glass-card">
+                <h3>Prediction Result</h3>
+                <div class="result-box">
+                    <div class="result-label">Projected Grade</div>
+                    <div class="result-value" id="student-result">--</div>
+                    <div class="result-label">Score (0-100)</div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="studentChart"></canvas>
+                </div>
+            </div>
+            <!-- User Models Demo -->
+            {% if user %}
+            <div id="user-demo" class="demo-content">
+                <div class="glass-card">
+                    <h3 style="margin-bottom: 1.5rem;">My Models</h3>
+
+                    {% if not user_models and not untrained_datasets %}
+                    <div style="text-align: center; padding: 2rem;">
+                        <p style="color: var(--text-secondary); margin-bottom: 1rem;">You haven't uploaded any data yet.
+                        </p>
+                        <a href="/dashboard" class="btn-predict"
+                            style="text-decoration: none; display: inline-block;">Go to Dashboard</a>
+                    </div>
+                    {% else %}
+                    <div class="form-group">
+                        <label>Select Trained Model</label>
+                        <select id="user_model_select" class="form-control" onchange="loadUserModel(this.value)">
+                            <option value="">-- Choose a model to predict --</option>
+                            {% for m in user_models %}
+                            <option value="{{ m.id }}">{{ m.name }} (Target: {{ m.target }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    {% if untrained_datasets %}
+                    <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <label style="font-size: 0.9rem; color: var(--text-secondary);">Uploaded but not
+                            trained:</label>
+                        <ul style="list-style: none; padding: 0; margin-top: 0.5rem;">
+                            {% for d in untrained_datasets %}
+                            <li
+                                style="margin-bottom: 0.5rem; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center;">
+                                <span style="opacity: 0.8;">{{ d.name }}</span>
+                                <a href="/dashboard"
+                                    style="color: var(--primary); text-decoration: none; font-size: 0.8rem;">Train in
+                                    Dashboard →</a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+
+                    <div id="user_model_inputs" style="margin-top: 1.5rem;">
+                        <!-- Dynamic inputs will appear here -->
+                        {% if not user_models %}
+                        <p style="color: var(--text-secondary); font-style: italic;">No trained models available.</p>
+                        {% else %}
+                        <p style="color: var(--text-secondary); font-style: italic;">Select a model above to see inputs
+                            for the target column.</p>
+                        {% endif %}
+                    </div>
+
+                    <button id="user_predict_btn" class="btn-predict" onclick="predictUserModel()"
+                        style="display: none;">Predict</button>
+                    {% endif %}
+                </div>
+
+                <div class="glass-card">
+                    <h3>Prediction Result</h3>
+                    <div class="result-box">
+                        <div class="result-label">Predicted Value</div>
+                        <div class="result-value" id="user-result">--</div>
+                        <div class="result-label" id="user-target-label">Target</div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div id="user-demo" class="demo-content">
+                <div class="glass-card" style="grid-column: span 2; text-align: center;">
+                    <h3>My Models</h3>
+                    <p style="color: var(--text-secondary); margin: 1rem 0;">Sign in to test your own trained models.
+                    </p>
+                    <a href="/login" class="tab-btn active" style="text-decoration: none; display: inline-block;">Sign
+                        In</a>
+                </div>
+            </div>
+            {% endif %}
+
+        </div>
+
+        <script>
+            // Charts
+            let salesChart, studentChart;
+
+            function initCharts() {
+                const ctxSales = document.getElementById('salesChart').getContext('2d');
+                salesChart = new Chart(ctxSales, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Target', 'Prediction'],
+                        datasets: [{
+                            label: 'Sales',
+                            data: [25, 0],
+                            backgroundColor: ['rgba(255, 255, 255, 0.2)', '#007aff'],
+                            borderWidth: 0,
+                            borderRadius: 10
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.1)' } }, x: { grid: { display: false } } }
+                    }
+                });
+
+                const ctxStudent = document.getElementById('studentChart').getContext('2d');
+                studentChart = new Chart(ctxStudent, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Grade', 'Remaining'],
+                        datasets: [{
+                            data: [0, 100],
+                            backgroundColor: ['#34c759', 'rgba(255, 255, 255, 0.1)'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '70%',
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            }
+
+            // Logic
+            function switchTab(tab) {
+                document.querySelectorAll('.demo-content').forEach(el => el.classList.remove('active'));
+                document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+                document.getElementById(tab + '-demo').classList.add('active');
+                event.target.classList.add('active');
+            }
+
+            function updateVal(id, val) {
+                document.getElementById(id).innerText = val;
+            }
+
+            function toggleTheme() {
+                const doc = document.documentElement;
+                const newTheme = doc.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                doc.setAttribute('data-theme', newTheme);
+                document.getElementById('theme-btn').innerText = newTheme === 'dark' ? '🌙' : '☀️';
+                localStorage.setItem('theme', newTheme);
+            }
+
+            // API Calls
+            async function predictSales() {
+                const tv = parseFloat(document.getElementById('tv_ad').value);
+                const radio = parseFloat(document.getElementById('radio_ad').value);
+                const news = parseFloat(document.getElementById('news_ad').value);
+
+                try {
+                    const res = await fetch('/api/predict', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model_type: 'sales',
+                            features: { 'TV_Ad_Budget': tv, 'Radio_Ad_Budget': radio, 'Newspaper_Ad_Budget': news }
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        const pred = data.prediction.toFixed(2);
+                        document.getElementById('sales-result').innerText = pred;
+                        salesChart.data.datasets[0].data[1] = data.prediction;
+                        salesChart.update();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                } catch (e) { console.error(e); alert('Prediction failed'); }
+            }
+
+            async function predictStudent() {
+                const hours = parseFloat(document.getElementById('study_hours').value);
+                const att = parseFloat(document.getElementById('attendance').value);
+                const prev = parseFloat(document.getElementById('prev_score').value);
+
+                try {
+                    const res = await fetch('/api/predict', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model_type: 'student',
+                            features: { 'Study_Hours': hours, 'Attendance_Percentage': att, 'Previous_Score': prev }
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        const pred = Math.min(100, Math.max(0, data.prediction)).toFixed(1);
+                        document.getElementById('student-result').innerText = pred;
+                        studentChart.data.datasets[0].data = [pred, 100 - pred];
+                        studentChart.update();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                } catch (e) { console.error(e); alert('Prediction failed'); }
+            }
+
+            // User Model Logic
+            let currentUserModelFeatures = [];
+
+            async function loadUserModel(datasetId) {
+                if (!datasetId) {
+                    document.getElementById('user_model_inputs').innerHTML = '<p style="color: var(--text-secondary); font-style: italic;">Select a model to see inputs.</p>';
+                    document.getElementById('user_predict_btn').style.display = 'none';
+                    return;
+                }
+
+                try {
+                    const res = await fetch(`/api/user_model_info/${datasetId}`);
+                    if (!res.ok) throw new Error('Failed to load model info');
+
+                    const data = await res.json();
+                    if (data.success) {
+                        currentUserModelFeatures = data.features;
+                        document.getElementById('user-target-label').innerText = data.target || 'Target';
+                        generateForm(data.features);
+                        document.getElementById('user_predict_btn').style.display = 'block';
+                    }
+                } catch (e) {
+                    console.error(e);
+                    alert('Error loading model info');
+                }
+            }
+
+            function generateForm(features) {
+                const container = document.getElementById('user_model_inputs');
+                container.innerHTML = '';
+
+                features.forEach(feature => {
+                    const div = document.createElement('div');
+                    div.className = 'form-group';
+                    div.innerHTML = `
+                    <label>${feature}</label>
+                    <input type="number" step="any" class="form-control user-feature-input" data-feature="${feature}" placeholder="Enter value">
+                `;
+                    container.appendChild(div);
+                });
+            }
+
+            async function predictUserModel() {
+                const datasetId = document.getElementById('user_model_select').value;
+                const inputs = document.querySelectorAll('.user-feature-input');
+                const features = {};
+
+                inputs.forEach(input => {
+                    features[input.dataset.feature] = parseFloat(input.value) || 0;
+                });
+
+                try {
+                    const res = await fetch('/api/predict_user_model', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            dataset_id: datasetId,
+                            features: features
+                        })
+                    });
+
+                    const data = await res.json();
+                    if (data.success) {
+                        document.getElementById('user-result').innerText = data.prediction.toFixed(4);
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                } catch (e) {
+                    console.error(e);
+                    alert('Prediction failed');
+                }
+            }
+
+            // Init
+            document.addEventListener('DOMContentLoaded', () => {
+                const savedTheme = localStorage.getItem('theme') || 'dark';
+                document.documentElement.setAttribute('data-theme', savedTheme);
+                initCharts();
+            });
+        </script>
+</body>
+
+</html>

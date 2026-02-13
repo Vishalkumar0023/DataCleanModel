@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Manager — Data Pipeline</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ───── iOS 26 Liquid Glass Design System ───── */
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.18);
+            --glass-bg-hover: rgba(255, 255, 255, 0.25);
+            --glass-border: rgba(255, 255, 255, 0.35);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+            --glass-blur: blur(60px) saturate(200%);
+            --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+            --text-primary: #fff;
+            --text-secondary: rgba(255, 255, 255, 0.75);
+            --accent: #007aff;
+            --danger: #ff453a;
+            --radius: 24px;
+            --radius-sm: 14px;
+            --separator: rgba(255, 255, 255, 0.15);
+        }
+
+        [data-theme="light"] {
+            --glass-bg: rgba(255, 255, 255, 0.55);
+            --glass-bg-hover: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.7);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+            --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+            --text-primary: #1c1c1e;
+            --text-secondary: rgba(0, 0, 0, 0.55);
+            --separator: rgba(0, 0, 0, 0.08);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+            min-height: 100vh;
+            color: var(--text-primary);
+            overflow-x: hidden;
+            transition: color 0.4s;
+        }
+
+        /* ── Wallpaper ── */
+        .wallpaper {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background:
+                radial-gradient(ellipse at 20% 20%, #f5af19 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, #f12711 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, #667eea 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, #764ba2 0%, transparent 50%),
+                linear-gradient(135deg, #f093fb 0%, #f5576c 25%, #4facfe 50%, #00f2fe 75%, #43e97b 100%);
+            background-size: 200% 200%;
+            animation: wallpaperShift 20s ease-in-out infinite;
+        }
+
+        [data-theme="dark"] .wallpaper {
+            background:
+                radial-gradient(ellipse at 30% 30%, #1a1a4e 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 20%, #2d1b69 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, #0c3547 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 70%, #1e3c72 0%, transparent 60%),
+                linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            background-size: 200% 200%;
+        }
+
+        @keyframes wallpaperShift {
+
+            0%,
+            100% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+        }
+
+        /* ── Navbar ── */
+        .navbar {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-radius: 18px;
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            padding: 0.625rem 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+            height: 54px;
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+            font-size: 1.0625rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .brand-icon {
+            width: 34px;
+            height: 34px;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-inner);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        .navbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+        }
+
+        .theme-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-inner);
+            color: var(--text-primary);
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.15s;
+        }
+
+        .theme-btn:active {
+            transform: scale(0.9);
+        }
+
+        .btn-back {
+            color: var(--accent);
+            background: none;
+            border: none;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            text-decoration: none;
+        }
+
+        /* ── Main ── */
+        .main-content {
+            position: relative;
+            z-index: 10;
+            padding: 5rem 1rem 2rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .page-header {
+            margin-bottom: 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            animation: fadeUp 0.5s ease-out;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(15px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .page-title {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        /* ── Glass Card ── */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-radius: var(--radius);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            margin-bottom: 1rem;
+            overflow: hidden;
+            animation: cardSlide 0.5s ease-out backwards;
+        }
+
+        @keyframes cardSlide {
+            from {
+                opacity: 0;
+                transform: translateY(20px) scale(0.97);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* ── Table ── */
+        .table-wrap {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+            text-align: left;
+        }
+
+        th,
+        td {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--separator);
+        }
+
+        th {
+            font-size: 0.6875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .checkbox-cell {
+            width: 40px;
+            text-align: center;
+        }
+
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+
+        .file-icon {
+            margin-right: 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        .file-name {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .file-meta {
+            color: var(--text-secondary);
+            font-size: 0.8125rem;
+        }
+
+        /* ── Buttons ── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.625rem 1rem;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--glass-border);
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            font-size: 0.8125rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn:active {
+            transform: scale(0.96);
+        }
+
+        .btn:hover {
+            background: var(--glass-bg-hover);
+        }
+
+        .btn-danger {
+            background: rgba(255, 69, 58, 0.2);
+            border-color: rgba(255, 69, 58, 0.3);
+            color: #ff6b6b;
+        }
+
+        .btn-danger:hover {
+            background: rgba(255, 69, 58, 0.3);
+        }
+
+        /* ── Loading ── */
+        #loader {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+        }
+
+        #empty-state {
+            text-align: center;
+            padding: 3rem;
+            display: none;
+        }
+
+        .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wallpaper"></div>
+
+    <nav class="navbar">
+        <a href="{{ url_for('index') }}" class="navbar-brand">
+            <div class="brand-icon">📂</div>
+            <span>File Manager</span>
+        </a>
+        <div class="navbar-actions">
+            <a href="{{ url_for('dashboard') }}"
+                style="width:36px;height:36px;border-radius:50%;background:var(--glass-bg);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);border:1px solid var(--glass-border);box-shadow:var(--glass-inner);display:flex;align-items:center;justify-content:center;font-size:1rem;text-decoration:none;transition:transform 0.15s;"
+                title="Dashboard">📊</a>
+            <button class="theme-btn" onclick="toggleTheme()" id="theme-icon">🌙</button>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">My Files</h1>
+                <p style="color:var(--text-secondary); font-size:0.9rem;">Manage your uploaded data and trained models
+                </p>
+            </div>
+            <button class="btn btn-danger" onclick="deleteSelected()" id="delete-btn" disabled>
+                🗑️ Delete Selected
+            </button>
+        </div>
+
+        <div class="glass-card">
+            <div class="table-wrap">
+                <table id="file-table">
+                    <thead>
+                        <tr>
+                            <th class="checkbox-cell"><input type="checkbox" id="select-all" onclick="toggleAll(this)">
+                            </th>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Size</th>
+                            <th>Date Modified</th>
+                        </tr>
+                    </thead>
+                    <tbody id="file-list">
+                        <!-- Filled by JS -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="loader">Loading files...</div>
+            <div id="empty-state">
+                <div class="empty-icon">📂</div>
+                <p>No files found.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Toggle Theme
+        function toggleTheme() {
+            const html = document.documentElement;
+            const next = html.dataset.theme === 'dark' ? 'light' : 'dark';
+            html.dataset.theme = next;
+            localStorage.setItem('theme', next);
+            document.getElementById('theme-icon').textContent = next === 'dark' ? '🌙' : '☀️';
+        }
+
+        // Load Theme
+        if (localStorage.getItem('theme') === 'light') {
+            document.documentElement.dataset.theme = 'light';
+            document.getElementById('theme-icon').textContent = '☀️';
+        }
+
+        // Format Bytes
+        function formatBytes(bytes, decimals = 2) {
+            if (!+bytes) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+        }
+
+        // Format Date
+        function formatDate(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        let files = [];
+
+        // Load Files
+        async function loadFiles() {
+            const loader = document.getElementById('loader');
+            const list = document.getElementById('file-list');
+            const empty = document.getElementById('empty-state');
+
+            try {
+                const res = await fetch('/api/user_files');
+                files = await res.json();
+
+                loader.style.display = 'none';
+                list.innerHTML = '';
+
+                if (files.length === 0) {
+                    empty.style.display = 'block';
+                    document.getElementById('file-table').style.display = 'none';
+                    return;
+                }
+
+                document.getElementById('file-table').style.display = 'table';
+                empty.style.display = 'none';
+
+                files.forEach(file => {
+                    const icon = file.name.endsWith('.pkl') ? '🧠' : '📄';
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="checkbox-cell"><input type="checkbox" class="file-check" value="${file.name}" onchange="updateDeleteBtn()"></td>
+                        <td>
+                            <div style="display:flex;align-items:center;">
+                                <span class="file-icon">${icon}</span>
+                                <span class="file-name">${file.name}</span>
+                            </div>
+                        </td>
+                        <td class="file-meta">${file.type}</td>
+                        <td class="file-meta">${formatBytes(file.size)}</td>
+                        <td class="file-meta">${formatDate(file.date)}</td>
+                    `;
+                    list.appendChild(row);
+                });
+            } catch (err) {
+                console.error(err);
+                loader.textContent = 'Error loading files.';
+            }
+        }
+
+        // Select All
+        function toggleAll(source) {
+            const checkboxes = document.querySelectorAll('.file-check');
+            checkboxes.forEach(cb => cb.checked = source.checked);
+            updateDeleteBtn();
+        }
+
+        // Update Delete Button State
+        function updateDeleteBtn() {
+            const checked = document.querySelectorAll('.file-check:checked');
+            const btn = document.getElementById('delete-btn');
+            btn.disabled = checked.length === 0;
+            btn.innerHTML = checked.length > 0 ? `🗑️ Delete Selected (${checked.length})` : '🗑️ Delete Selected';
+        }
+
+        // Delete Selected
+        async function deleteSelected() {
+            const checked = document.querySelectorAll('.file-check:checked');
+            if (checked.length === 0) return;
+
+            if (!confirm(`Are you sure you want to delete ${checked.length} files? This cannot be undone.`)) return;
+
+            const filenames = Array.from(checked).map(cb => cb.value);
+            const btn = document.getElementById('delete-btn');
+            btn.innerHTML = 'Deleting...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/delete_files', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filenames })
+                });
+
+                const result = await res.json();
+
+                if (result.errors && result.errors.length > 0) {
+                    alert('Partial success using deletion:\n' + result.errors.join('\n'));
+                }
+
+                // Reload
+                await loadFiles();
+                document.getElementById('select-all').checked = false;
+                updateDeleteBtn();
+
+            } catch (err) {
+                alert('Error deleting files: ' + err);
+                btn.disabled = false;
+                updateDeleteBtn();
+            }
+        }
+
+        // Init
+        loadFiles();
+    </script>
+</body>
+
+</html>
