@@ -643,6 +643,31 @@
                 justify-content: flex-end;
             }
         }
+
+        /* ── Modal ── */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(5px);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.visible {
+            display: flex;
+        }
+
+        .modal-content {
+            width: 90%;
+            max-width: 500px;
+            animation: cardSlide 0.3s ease-out;
+        }
     </style>
 </head>
 
@@ -655,8 +680,13 @@
             <span>Data Pipeline</span>
         </a>
         <div class="navbar-actions">
+            <a href="{{ url_for('demo_page') }}" class="btn" style="text-decoration: none; margin-right: 10px;">🚀
+                Demo</a>
             <a href="{{ url_for('index') }}" class="btn-icon" title="Home"
                 style="width:36px;height:36px;border-radius:50%;background:var(--glass-bg);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);border:1px solid var(--glass-border);box-shadow:var(--glass-inner);display:flex;align-items:center;justify-content:center;font-size:1rem;text-decoration:none;transition:transform 0.15s;">🏠</a>
+            <a href="{{ url_for('file_manager') }}"
+                style="width:36px;height:36px;border-radius:50%;background:var(--glass-bg);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);border:1px solid var(--glass-border);box-shadow:var(--glass-inner);display:flex;align-items:center;justify-content:center;font-size:1rem;text-decoration:none;transition:transform 0.15s;"
+                title="File Manager">📂</a>
             <button class="theme-btn" onclick="toggleTheme()" id="theme-icon">🌙</button>
             <div class="user-pill">
                 <div class="user-avatar">👤</div>
@@ -755,6 +785,8 @@
                         </div>
                     </div>
                     <div class="list-item-actions">
+                        <button class="btn btn-icon" onclick="openTransformModal({{ dataset.id }})"
+                            title="Transform">🪄</button>
                         <a href="{{ url_for('view_dataset', dataset_id=dataset.id) }}" class="btn btn-icon"
                             title="View">👁️</a>
                         <a href="{{ url_for('download_dataset', dataset_id=dataset.id, file_type='final') }}"
@@ -772,6 +804,41 @@
                 <div class="empty-text">Upload a CSV to get started</div>
             </div>
             {% endif %}
+        </div>
+    </div>
+
+    <!-- Transform Modal -->
+    <div id="transform-modal" class="modal">
+        <div class="glass-card modal-content" style="margin: 0;">
+            <div class="card-header">
+                <div class="card-icon">🪄</div>
+                <h2>Transform Dataset</h2>
+                <button class="btn-icon" onclick="closeTransformModal()" style="margin-left: auto;">✕</button>
+            </div>
+            <div class="card-body">
+                <input type="hidden" id="transform-dataset-id">
+
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label
+                        style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.875rem;">Operation</label>
+                    <select id="transform-op"
+                        style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); color: var(--text-primary); border-radius: 12px; font-size: 1rem;"
+                        onchange="updateTransformFields()">
+                        <option value="clean_numeric_text">Clean Numeric Text (e.g. '$1.2k')</option>
+                        <option value="rename_columns">Rename Columns</option>
+                        <option value="extract_regex">Extract Text (Regex)</option>
+                        <option value="remove_duplicates">Remove Duplicates</option>
+                        <option value="drop_columns">Drop Columns</option>
+                    </select>
+                </div>
+
+                <div id="transform-params" style="margin-bottom: 1.5rem;">
+                    <!-- Dynamic inputs -->
+                </div>
+
+                <button class="btn btn-primary" onclick="submitTransform()"
+                    style="width: 100%; justify-content: center;">Apply Transformation</button>
+            </div>
         </div>
     </div>
 
@@ -918,6 +985,136 @@
             el.textContent = msg;
             el.classList.add('visible');
             if (type === 'success') setTimeout(() => el.classList.remove('visible'), 4000);
+        }
+
+        // Transformation Logic
+        function openTransformModal(id) {
+            document.getElementById('transform-dataset-id').value = id;
+            document.getElementById('transform-modal').classList.add('visible');
+            updateTransformFields();
+        }
+
+        function closeTransformModal() {
+            document.getElementById('transform-modal').classList.remove('visible');
+        }
+
+        function updateTransformFields() {
+            const op = document.getElementById('transform-op').value;
+            const container = document.getElementById('transform-params');
+            container.innerHTML = '';
+
+            let html = '';
+
+            if (op === 'clean_numeric_text') {
+                html = `
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        Automatically detects and cleans text columns containing numbers (e.g., "$1,200", "1.5k").
+                    </p>
+                    <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+                        <input type="checkbox" id="clean-symbols" checked> Remove symbols ($, €)
+                    </label>
+                    <label style="display:flex; align-items:center; gap:0.5rem;">
+                        <input type="checkbox" id="clean-shorthand" checked> Handle shorthand (k, M)
+                    </label>
+                `;
+            } else if (op === 'rename_columns') {
+                html = `
+                    <div class="form-row">
+                        <label>Old Name</label>
+                        <input type="text" id="rename-old" placeholder="Column to rename">
+                    </div>
+                    <div class="form-row" style="margin-top: 0.5rem;">
+                        <label>New Name</label>
+                        <input type="text" id="rename-new" placeholder="New name">
+                    </div>
+                `;
+            } else if (op === 'extract_regex') {
+                html = `
+                    <div class="form-row">
+                        <label>Source</label>
+                        <input type="text" id="regex-source" placeholder="Source column">
+                    </div>
+                    <div class="form-row" style="margin-top: 0.5rem;">
+                        <label>Pattern</label>
+                        <input type="text" id="regex-pattern" placeholder="Regex (e.g. ID: (\\d+))">
+                    </div>
+                    <div class="form-row" style="margin-top: 0.5rem;">
+                        <label>Target</label>
+                        <input type="text" id="regex-target" placeholder="New column name">
+                    </div>
+                `;
+            } else if (op === 'remove_duplicates') {
+                html = `
+                    <p style="font-size: 0.8rem; color: var(--text-secondary);">
+                        Removes duplicate rows from the dataset.
+                    </p>
+                `;
+            } else if (op === 'drop_columns') {
+                html = `
+                    <div class="form-row">
+                        <label>Column</label>
+                        <input type="text" id="drop-col" placeholder="Column to drop">
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
+        async function submitTransform() {
+            const id = document.getElementById('transform-dataset-id').value;
+            const op = document.getElementById('transform-op').value;
+            let params = {};
+
+            if (op === 'clean_numeric_text') {
+                params = {
+                    remove_symbols: document.getElementById('clean-symbols').checked,
+                    handle_shorthand: document.getElementById('clean-shorthand').checked
+                };
+            } else if (op === 'rename_columns') {
+                const oldName = document.getElementById('rename-old').value;
+                const newName = document.getElementById('rename-new').value;
+                if (!oldName || !newName) return alert('Please fill in both names');
+                params = { mapping: { [oldName]: newName } };
+            } else if (op === 'extract_regex') {
+                params = {
+                    source_col: document.getElementById('regex-source').value,
+                    pattern: document.getElementById('regex-pattern').value,
+                    new_col_name: document.getElementById('regex-target').value
+                };
+            } else if (op === 'drop_columns') {
+                const col = document.getElementById('drop-col').value;
+                if (!col) return alert('Please specify a column');
+                params = { columns: [col] };
+            }
+
+            const btn = document.querySelector('#transform-modal .btn-primary');
+            const originalText = btn.innerText;
+            btn.innerText = 'Processing...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`/api/dataset/${id}/transform`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ operation: op, params: params })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    showAlert('Transformation applied successfully!', 'success');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showAlert('Error: ' + data.error, 'error');
+                }
+            } catch (e) {
+                console.error(e);
+                showAlert('An error occurred', 'error');
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
         }
 
         /* ── JWT Auto-Refresh ── */

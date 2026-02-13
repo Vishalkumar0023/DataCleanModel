@@ -602,6 +602,9 @@
             <a href="{{ url_for('index') }}"
                 style="width:36px;height:36px;border-radius:50%;background:var(--glass-bg);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);border:1px solid var(--glass-border);box-shadow:var(--glass-inner);display:flex;align-items:center;justify-content:center;font-size:1rem;text-decoration:none;transition:transform 0.15s;"
                 title="Home">🏠</a>
+            <a href="{{ url_for('file_manager') }}"
+                style="width:36px;height:36px;border-radius:50%;background:var(--glass-bg);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);border:1px solid var(--glass-border);box-shadow:var(--glass-inner);display:flex;align-items:center;justify-content:center;font-size:1rem;text-decoration:none;transition:transform 0.15s;"
+                title="File Manager">📂</a>
             <button class="theme-btn" onclick="toggleTheme()" id="theme-icon">🌙</button>
             <a href="{{ url_for('dashboard') }}" class="btn-back">‹ Back</a>
         </div>
@@ -619,10 +622,16 @@
                 <span class="badge">{{ dataset.problem_type or 'N/A' }}</span>
             </div>
             <div class="btn-group">
-                <a href="{{ url_for('download_dataset', dataset_id=dataset.id, file_type='cleaned') }}" class="btn">📥 Cleaned (CSV)</a>
-                <a href="{{ url_for('download_dataset', dataset_id=dataset.id, file_type='cleaned', format='xlsx') }}" class="btn">📊 Cleaned (Excel)</a>
-                <a href="{{ url_for('download_dataset', dataset_id=dataset.id, file_type='final') }}" class="btn btn-success">⬇️ Model-Ready (CSV)</a>
-                <a href="{{ url_for('download_dataset', dataset_id=dataset.id, file_type='final', format='xlsx') }}" class="btn btn-success" style="background:rgba(52, 199, 89, 0.25); border-color:rgba(52, 199, 89, 0.2);">📊 Model-Ready (Excel)</a>
+                <a href="{{ url_for('download_dataset', dataset_id=dataset.id, file_type='cleaned') }}" class="btn">📥
+                    Cleaned (CSV)</a>
+                <a href="{{ url_for('download_dataset', dataset_id=dataset.id, file_type='cleaned', format='xlsx') }}"
+                    class="btn">📊 Cleaned (Excel)</a>
+                <a href="{{ url_for('download_dataset', dataset_id=dataset.id, file_type='final') }}"
+                    class="btn btn-success">⬇️ Model-Ready (CSV)</a>
+                <a href="{{ url_for('download_dataset', dataset_id=dataset.id, file_type='final', format='xlsx') }}"
+                    class="btn btn-success"
+                    style="background:rgba(52, 199, 89, 0.25); border-color:rgba(52, 199, 89, 0.2);">📊 Model-Ready
+                    (Excel)</a>
                 <button class="btn" id="train-btn" onclick="trainModel()"
                     style="background:linear-gradient(135deg,#667eea,#764ba2);border:none;cursor:pointer;">🧠 Train
                     Model</button>

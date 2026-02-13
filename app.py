@@ -23,7 +23,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from data_pipeline import DataPipeline, ModelTrainer
+from data_pipeline import DataPipeline, ModelTrainer, DataCleaner
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -598,6 +598,124 @@ def view_dataset(dataset_id):
     # Ensure user owns this dataset
     if dataset.user_id != g.current_user.id:
         return jsonify({'error': 'Access denied'}), 403
+        
+    # Load samples for preview
+    cleaned_sample = []
+    cleaned_columns = []
+    final_sample = []
+    final_columns = []
+    
+    try:
+        if os.path.exists(dataset.cleaned_path):
+            df_clean = pd.read_csv(dataset.cleaned_path)
+            cleaned_columns = df_clean.columns.tolist()
+            # Replace NaN with None for Jinja
+            cleaned_sample = df_clean.head(10).replace({np.nan: None}).to_dict('records')
+            
+        if os.path.exists(dataset.final_path):
+            df_final = pd.read_csv(dataset.final_path)
+            final_columns = df_final.columns.tolist()
+            final_sample = df_final.head(10).replace({np.nan: None}).to_dict('records')
+    except Exception as e:
+        print(f"Error loading dataset samples: {e}")
+        
+    return render_template('view_dataset.html', 
+        dataset=dataset,
+        cleaned_columns=cleaned_columns,
+        cleaned_sample=cleaned_sample,
+        final_columns=final_columns,
+        final_sample=final_sample,
+        processing_log=json.loads(dataset.processing_log) if dataset.processing_log else {}
+    )
+
+
+@app.route('/api/dataset/<int:dataset_id>/transform', methods=['POST'])
+@jwt_required
+def transform_dataset(dataset_id):
+    """Apply data transformations."""
+    dataset = Dataset.query.get_or_404(dataset_id)
+    if dataset.user_id != g.current_user.id:
+        return jsonify({'error': 'Access denied'}), 403
+        
+    data = request.json
+    operation = data.get('operation')
+    params = data.get('params', {})
+    
+    # Load pipeline (just to use loader/cleaner logic)
+    pipeline = DataPipeline()
+    # Use cleaned path as starting point
+    if os.path.exists(dataset.cleaned_path):
+        pipeline.load(dataset.cleaned_path)
+    else:
+        return jsonify({'error': 'Dataset file not found'}), 404
+        
+    # Initialize cleaner with current data
+    cleaner = DataCleaner(pipeline.raw_df)
+    
+    try:
+        if operation == 'clean_numeric_text':
+            cleaner.clean_numeric_text(**params)
+        elif operation == 'rename_columns':
+            cleaner.rename_columns(**params)
+        elif operation == 'extract_regex':
+            cleaner.extract_regex_feature(**params)
+        elif operation == 'remove_duplicates':
+            cleaner.remove_duplicates(**params)
+        elif operation == 'drop_columns':
+            cleaner.drop_columns(**params)
+        else:
+            return jsonify({'error': 'Invalid operation'}), 400
+            
+        # Get updated dataframe
+        new_df = cleaner.get_cleaned_data()
+        
+        # Save updated file (overwriting cleaned path for now)
+        cleaned_path = dataset.cleaned_path
+        new_df.to_csv(cleaned_path, index=False)
+        
+        # Also update final path if we are treating them similarly, 
+        # or just let future feature engineering handle it. 
+        # For this demo, let's keep them in sync if no detailed FE has been done yet.
+        if os.path.exists(dataset.final_path):
+            new_df.to_csv(dataset.final_path, index=False)
+            dataset.final_rows = new_df.shape[0]
+            dataset.final_cols = new_df.shape[1]
+        
+        # Update metadata
+        dataset.cleaned_rows = new_df.shape[0]
+        dataset.cleaned_cols = new_df.shape[1]
+        
+        # Add to log
+        try:
+            log = json.loads(dataset.processing_log) if dataset.processing_log else {}
+        except:
+            log = {}
+            
+        if 'cleaning' not in log: log['cleaning'] = []
+        
+        # Get last operation from cleaner log
+        if cleaner.cleaning_log:
+            log['cleaning'].extend(cleaner.cleaning_log[-1:])
+            
+        dataset.processing_log = json.dumps(log)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'preview': new_df.head().replace({np.nan: None}).to_dict(orient='records'),
+            'columns': new_df.columns.tolist(),
+            'stats': {
+                'rows': new_df.shape[0],
+                'cols': new_df.shape[1]
+            },
+            'message': cleaner.cleaning_log[-1] if cleaner.cleaning_log else "Transformation applied"
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
     
     # Load cleaned data preview
     cleaned_df = pd.read_csv(dataset.cleaned_path)
@@ -784,11 +902,272 @@ def train_model(dataset_id):
 
 
 # ==============================================================================
+# FILE MANAGEMENT ROUTES
+# ==============================================================================
+
+@app.route('/files')
+@jwt_required
+def file_manager():
+    """Render the file manager page."""
+    return render_template('files.html')
+
+@app.route('/api/user_files')
+@jwt_required
+def get_user_files():
+    """Get list of files in user's directory."""
+    user_folder = get_user_folder(g.current_user.id)
+    files = []
+    
+    if os.path.exists(user_folder):
+        for entry in os.scandir(user_folder):
+            if entry.is_file() and not entry.name.startswith('.'):
+                try:
+                    stat = entry.stat()
+                    file_type = 'Unknown'
+                    if entry.name.endswith('.pkl'):
+                        file_type = 'Model (.pkl)'
+                    elif entry.name.endswith('.csv'):
+                        if 'cleaned' in entry.name:
+                            file_type = 'Cleaned Data (.csv)'
+                        elif 'final' in entry.name:
+                            file_type = 'Model-Ready Data (.csv)'
+                        else:
+                            file_type = 'Raw Data (.csv)'
+                    
+                    files.append({
+                        'name': entry.name,
+                        'size': stat.st_size,
+                        'date': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                        'type': file_type
+                    })
+                except Exception as e:
+                    print(f"Error reading file {entry.name}: {e}")
+
+    # Sort by date desc
+    files.sort(key=lambda x: x['date'], reverse=True)
+    return jsonify(files)
+
+@app.route('/api/delete_files', methods=['POST'])
+@jwt_required
+def delete_user_files():
+    """Bulk delete files."""
+    data = request.json
+    filenames = data.get('filenames', [])
+    user_folder = get_user_folder(g.current_user.id)
+    deleted = []
+    errors = []
+    
+    for filename in filenames:
+        # Security check: ensure filename doesn't contain path traversal
+        if '..' in filename or '/' in filename or '\\' in filename:
+            errors.append(f"Invalid filename: {filename}")
+            continue
+            
+        path = os.path.join(user_folder, filename)
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+                deleted.append(filename)
+            else:
+                errors.append(f"File not found: {filename}")
+        except Exception as e:
+            errors.append(f"Error deleting {filename}: {str(e)}")
+            
+    return jsonify({'deleted': deleted, 'errors': errors})
+
+
+# ==============================================================================
 # INIT DATABASE
 # ==============================================================================
 
 with app.app_context():
     db.create_all()
+
+
+# ==============================================================================
+# DEMO & PREDICTION ROUTE
+# ==============================================================================
+
+DEMO_MODELS_DIR = 'demo_models'
+
+def load_demo_model(model_type):
+    """Load a demo model (cached if possible)."""
+    try:
+        if model_type not in ['sales', 'student']:
+            return None
+        
+        filename = f'{model_type}_model.pkl'
+        path = os.path.join(DEMO_MODELS_DIR, filename)
+        
+        if not os.path.exists(path):
+            return None
+            
+        import joblib
+        return joblib.load(path)
+    except Exception as e:
+        print(f"Error loading demo model: {e}")
+        return None
+
+@app.route('/api/predict', methods=['POST'])
+def predict_demo():
+    """
+    Public API endpoint for demo predictions.
+    Does NOT require JWT auth to allow easy testing.
+    Payload: { "model_type": "sales"|"student", "features": {...} }
+    """
+    try:
+        data = request.json
+        model_type = data.get('model_type')
+        features = data.get('features')
+        
+        if not model_type or not features:
+            return jsonify({'error': 'Missing model_type or features'}), 400
+            
+        model = load_demo_model(model_type)
+        if not model:
+            return jsonify({'error': 'Model not found or could not be loaded'}), 404
+            
+        # Prepare input data
+        # Expecting features to be a dict, convertible to DataFrame for sklearn
+        # e.g. {"TV_Ad_Budget": 100, ...}
+        
+        # Ensure correct feature order/names based on training
+        if model_type == 'sales':
+            feature_names = ['TV_Ad_Budget', 'Radio_Ad_Budget', 'Newspaper_Ad_Budget']
+        elif model_type == 'student':
+            feature_names = ['Study_Hours', 'Attendance_Percentage', 'Previous_Score']
+        else:
+            return jsonify({'error': 'Unknown model type'}), 400
+            
+        # Create DataFrame
+        try:
+            input_df = pd.DataFrame([features])
+            # Select/Reorder columns
+            input_df = input_df[feature_names]
+        except KeyError as e:
+            return jsonify({'error': f'Missing feature: {str(e)}'}), 400
+            
+        # Predict
+        prediction = model.predict(input_df)[0]
+        
+        return jsonify({
+            'success': True,
+            'model_type': model_type,
+            'prediction': float(prediction)
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/demo')
+def demo_page():
+    """Render the public demo page."""
+    user = get_current_user()
+    user_models = []
+    untrained_datasets = []
+    
+    if user:
+        # Fetch all user datasets
+        datasets = Dataset.query.filter_by(user_id=user.id).all()
+        for d in datasets:
+            info = {
+                'id': d.id,
+                'name': d.name,
+                'target': d.target_column,
+                'type': d.problem_type,
+                'created_at': d.created_at.strftime('%Y-%m-%d')
+            }
+            
+            if d.model_path and os.path.exists(d.model_path):
+                user_models.append(info)
+            else:
+                untrained_datasets.append(info)
+                
+    return render_template('demo.html', user=user, user_models=user_models, untrained_datasets=untrained_datasets)
+
+
+@app.route('/api/user_model_info/<int:dataset_id>')
+@jwt_required
+def get_user_model_info(dataset_id):
+    """Get metadata for a user's trained model."""
+    dataset = Dataset.query.get_or_404(dataset_id)
+    if dataset.user_id != g.current_user.id:
+        return jsonify({'error': 'Access denied'}), 403
+        
+    if not dataset.model_path or not os.path.exists(dataset.model_path):
+        return jsonify({'error': 'Model not found'}), 404
+        
+    try:
+        import joblib
+        model_data = joblib.load(dataset.model_path)
+        
+        # Extract metadata
+        # model_data is a dict with keys: scalar, label_encoder, feature_names, etc.
+        return jsonify({
+            'success': True,
+            'name': dataset.name,
+            'features': model_data.get('feature_names', []),
+            'target': dataset.target_column,
+            'problem_type': dataset.problem_type,
+            'metrics': model_data.get('metrics', {})
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/predict_user_model', methods=['POST'])
+@jwt_required
+def predict_user_model():
+    """Predict using a user's trained model."""
+    try:
+        data = request.json
+        dataset_id = data.get('dataset_id')
+        features = data.get('features')
+        
+        if not dataset_id or not features:
+            return jsonify({'error': 'Missing dataset_id or features'}), 400
+            
+        dataset = Dataset.query.get_or_404(dataset_id)
+        if dataset.user_id != g.current_user.id:
+            return jsonify({'error': 'Access denied'}), 403
+            
+        if not dataset.model_path or not os.path.exists(dataset.model_path):
+            return jsonify({'error': 'Model not found'}), 404
+            
+        import joblib
+        model_data = joblib.load(dataset.model_path)
+        
+        model = model_data.get('model')
+        scaler = model_data.get('scaler')
+        feature_names = model_data.get('feature_names', [])
+        
+        # Prepare input
+        input_df = pd.DataFrame([features])
+        
+        # Ensure columns match training data
+        # Fill missing with 0 or mean? 0 for now
+        for col in feature_names:
+            if col not in input_df.columns:
+                input_df[col] = 0
+        
+        # Reorder
+        input_df = input_df[feature_names]
+        
+        # Scale
+        if scaler:
+            input_df = scaler.transform(input_df)
+            
+        # Predict
+        prediction = model.predict(input_df)[0]
+        
+        return jsonify({
+            'success': True,
+            'prediction': float(prediction),
+            'target': dataset.target_column
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # ==============================================================================

@@ -10,6 +10,7 @@ import numpy as np
 from typing import Optional, Dict, List, Any, Union
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, LabelEncoder, OneHotEncoder
 from sklearn.feature_selection import VarianceThreshold
+import re
 
 
 class DataCleaner:
@@ -459,6 +460,157 @@ class DataCleaner:
                 "columns": columns,
                 "changes": changes
             })
+            
+        return self
+
+    def clean_numeric_text(
+        self,
+        columns: Optional[List[str]] = None,
+        remove_symbols: bool = True,
+        handle_shorthand: bool = True
+    ) -> 'DataCleaner':
+        """
+        Clean text columns containing numbers (e.g. '$1,200', '1.5k').
+        
+        Parameters:
+        -----------
+        columns : list, optional
+            Columns to clean
+        remove_symbols : bool
+            Remove currency symbols and commas
+        handle_shorthand : bool
+            Convert 'k', 'M', 'B' suffixes (e.g. 1.5k -> 1500)
+        """
+        if columns is None:
+            # Try to guess columns that look like numeric text
+            columns = []
+            for col in self.df.select_dtypes(include=['object', 'string']).columns:
+                # Sample check
+                sample = self.df[col].dropna().astype(str).sample(min(20, len(self.df)), random_state=42)
+                if sample.str.contains(r'[\$\€\£\,kKmMbB]').any() and sample.str.contains(r'\d').all():
+                    columns.append(col)
+
+        changes = []
+        
+        for col in columns:
+            if col not in self.df.columns:
+                continue
+                
+            original_nans = self.df[col].isna().sum()
+            
+            # Work on a copy
+            series = self.df[col].astype(str).str.strip()
+            
+            if remove_symbols:
+                # Remove typical currency symbols and commas
+                series = series.str.replace(r'[\$\€\£\,\s]', '', regex=True)
+            
+            if handle_shorthand:
+                def parse_shorthand(val):
+                    if pd.isna(val) or val == 'nan': return np.nan
+                    val = val.lower()
+                    multiplier = 1
+                    if val.endswith('k'):
+                        multiplier = 1000
+                        val = val[:-1]
+                    elif val.endswith('m'):
+                        multiplier = 1000000
+                        val = val[:-1]
+                    elif val.endswith('b'):
+                        multiplier = 1000000000
+                        val = val[:-1]
+                    
+                    try:
+                        return float(val) * multiplier
+                    except:
+                        return np.nan
+
+                self.df[col] = series.apply(parse_shorthand)
+            else:
+                self.df[col] = pd.to_numeric(series, errors='coerce')
+                
+            new_nans = self.df[col].isna().sum()
+            valid_converted = len(self.df) - new_nans
+            
+            if valid_converted > 0:
+                changes.append(f"{col}: Converted to numeric ({valid_converted} valid)")
+        
+        if changes:
+            self.cleaning_log.append(f"Cleaned numeric text in {len(changes)} columns")
+            self.transformations.append({
+                "operation": "clean_numeric_text",
+                "columns": columns,
+                "changes": changes
+            })
+            
+        return self
+
+    def rename_columns(
+        self,
+        mapping: Dict[str, str]
+    ) -> 'DataCleaner':
+        """
+        Rename columns.
+        
+        Parameters:
+        -----------
+        mapping : dict
+            Dictionary of {old_name: new_name}
+        """
+        # Filter mapping to existing columns
+        valid_mapping = {k: v for k, v in mapping.items() if k in self.df.columns}
+        
+        if valid_mapping:
+            self.df.rename(columns=valid_mapping, inplace=True)
+            msg = f"Renamed {len(valid_mapping)} columns: {valid_mapping}"
+            self.cleaning_log.append(msg)
+            self.transformations.append({
+                "operation": "rename_columns",
+                "mapping": valid_mapping
+            })
+            
+        return self
+
+    def extract_regex_feature(
+        self,
+        source_col: str,
+        pattern: str,
+        new_col_name: str
+    ) -> 'DataCleaner':
+        """
+        Extract text using regex capture group.
+        
+        Parameters:
+        -----------
+        source_col : str
+            Source column name
+        pattern : str
+            Regex pattern with one capture group (e.g. r'ID: (\d+)')
+        new_col_name : str
+            Name for the new column
+        """
+        if source_col not in self.df.columns:
+            return self
+            
+        try:
+            # Ensure pattern is raw string if possible, generally passed as string here
+            extracted = self.df[source_col].astype(str).str.extract(pattern, expand=False)
+            
+            self.df[new_col_name] = extracted
+            
+            matched_count = extracted.notna().sum()
+            msg = f"Extracted '{new_col_name}' from '{source_col}' ({matched_count} matches)"
+            self.cleaning_log.append(msg)
+            self.transformations.append({
+                "operation": "extract_regex",
+                "source": source_col,
+                "target": new_col_name,
+                "pattern": pattern,
+                "matches": int(matched_count)
+            })
+            
+        except Exception as e:
+            self.cleaning_log.append(f"Regex extraction failed: {e}")
             
         return self
 
