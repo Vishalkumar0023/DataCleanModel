@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Pipeline — Automated Data Cleaning & Feature Engineering</title>
+    <meta name="description"
+        content="Clean, analyze, and transform your datasets in seconds. Automated data pipeline for CSV & Excel files with zero coding required.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        /* ───── iOS 26 Liquid Glass Design System ───── */
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.18);
+            --glass-bg-hover: rgba(255, 255, 255, 0.25);
+            --glass-border: rgba(255, 255, 255, 0.35);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+            --glass-blur: blur(60px) saturate(200%);
+            --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+            --text-primary: #fff;
+            --text-secondary: rgba(255, 255, 255, 0.75);
+            --text-tertiary: rgba(255, 255, 255, 0.5);
+            --accent: #007aff;
+            --accent-hover: #0066d6;
+            --success: #34c759;
+            --radius: 24px;
+            --radius-sm: 14px;
+            --separator: rgba(255, 255, 255, 0.15);
+        }
+
+        [data-theme="light"] {
+            --glass-bg: rgba(255, 255, 255, 0.55);
+            --glass-bg-hover: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.7);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+            --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+            --text-primary: #1c1c1e;
+            --text-secondary: rgba(0, 0, 0, 0.55);
+            --text-tertiary: rgba(0, 0, 0, 0.35);
+            --separator: rgba(0, 0, 0, 0.08);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display', sans-serif;
+            color: var(--text-primary);
+            overflow-x: hidden;
+            transition: color 0.4s;
+        }
+
+        /* ── Wallpaper ── */
+        .wallpaper {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background:
+                radial-gradient(ellipse at 20% 20%, #f5af19 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, #f12711 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, #667eea 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, #764ba2 0%, transparent 50%),
+                linear-gradient(135deg, #f093fb 0%, #f5576c 25%, #4facfe 50%, #00f2fe 75%, #43e97b 100%);
+            background-size: 200% 200%;
+            animation: wallpaperShift 20s ease-in-out infinite;
+        }
+
+        [data-theme="dark"] .wallpaper {
+            background:
+                radial-gradient(ellipse at 30% 30%, #1a1a4e 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 20%, #2d1b69 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, #0c3547 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 70%, #1e3c72 0%, transparent 60%),
+                linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            background-size: 200% 200%;
+        }
+
+        @keyframes wallpaperShift {
+
+            0%,
+            100% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+        }
+
+        /* ── Glass Navbar ── */
+        .navbar {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-radius: 18px;
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            padding: 0.5rem 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+            height: 56px;
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+            font-size: 1.0625rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .brand-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-inner);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.125rem;
+        }
+
+        .navbar-links {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .nav-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            padding: 0.5rem 0.875rem;
+            border-radius: 10px;
+            transition: all 0.15s;
+        }
+
+        .nav-link:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .theme-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-inner);
+            color: var(--text-primary);
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.15s;
+            margin-left: 0.5rem;
+        }
+
+        .theme-btn:active {
+            transform: scale(0.9);
+        }
+
+        .btn-cta-nav {
+            padding: 0.5rem 1.125rem;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 122, 255, 0.4);
+            background: rgba(0, 122, 255, 0.5);
+            backdrop-filter: var(--glass-blur);
+            box-shadow: var(--glass-inner);
+            color: white;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.15s;
+            margin-left: 0.5rem;
+        }
+
+        .btn-cta-nav:hover {
+            background: rgba(0, 122, 255, 0.65);
+        }
+
+        .btn-cta-nav:active {
+            transform: scale(0.96);
+        }
+
+        /* ── PAGE SECTIONS ── */
+        section {
+            position: relative;
+            z-index: 10;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 1.25rem;
+        }
+
+        /* ── HERO ── */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 6rem 1.25rem 4rem;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-inner);
+            border-radius: 50px;
+            padding: 0.4rem 1rem 0.4rem 0.5rem;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            margin-bottom: 2rem;
+            animation: fadeUp 0.6s ease-out;
+        }
+
+        .hero-badge .dot {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        .hero h1 {
+            font-size: clamp(2.5rem, 6vw, 4rem);
+            font-weight: 800;
+            letter-spacing: -1.5px;
+            line-height: 1.1;
+            margin-bottom: 1.25rem;
+            animation: fadeUp 0.6s ease-out 0.1s backwards;
+        }
+
+        .hero h1 .gradient-text {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 50%, #43e97b 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        [data-theme="light"] .hero h1 .gradient-text {
+            background: linear-gradient(135deg, #007aff 0%, #5856d6 50%, #af52de 100%);
+            -webkit-background-clip: text;
+        }
+
+        .hero-sub {
+            font-size: clamp(1rem, 2.5vw, 1.25rem);
+            color: var(--text-secondary);
+            max-width: 600px;
+            line-height: 1.6;
+            margin-bottom: 2.5rem;
+            animation: fadeUp 0.6s ease-out 0.2s backwards;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            animation: fadeUp 0.6s ease-out 0.3s backwards;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(25px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .btn-hero-primary {
+            padding: 0.9375rem 2rem;
+            border-radius: 16px;
+            border: 1px solid rgba(0, 122, 255, 0.4);
+            background: rgba(0, 122, 255, 0.55);
+            backdrop-filter: var(--glass-blur);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            color: white;
+            font-size: 1.0625rem;
+            font-weight: 700;
+            text-decoration: none;
+            transition: all 0.2s;
+            font-family: inherit;
+            cursor: pointer;
+        }
+
+        .btn-hero-primary:hover {
+            background: rgba(0, 122, 255, 0.7);
+            transform: translateY(-2px);
+        }
+
+        .btn-hero-primary:active {
+            transform: scale(0.97);
+        }
+
+        .btn-hero-secondary {
+            padding: 0.9375rem 2rem;
+            border-radius: 16px;
+            border: 1px solid var(--glass-border);
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            color: var(--text-primary);
+            font-size: 1.0625rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+            font-family: inherit;
+            cursor: pointer;
+        }
+
+        .btn-hero-secondary:hover {
+            background: var(--glass-bg-hover);
+            transform: translateY(-2px);
+        }
+
+        /* ── Supported Formats ── */
+        .formats-bar {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            margin-top: 3rem;
+            animation: fadeUp 0.6s ease-out 0.4s backwards;
+        }
+
+        .formats-label {
+            font-size: 0.75rem;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+
+        .format-chip {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-inner);
+            padding: 0.4rem 0.875rem;
+            border-radius: 10px;
+            font-size: 0.8125rem;
+            font-weight: 600;
+        }
+
+        /* ── FEATURES ── */
+        .features-section {
+            padding: 5rem 0;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .section-eyebrow {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 0.75rem;
+        }
+
+        .section-title {
+            font-size: clamp(1.75rem, 4vw, 2.5rem);
+            font-weight: 800;
+            letter-spacing: -1px;
+            margin-bottom: 0.75rem;
+        }
+
+        .section-desc {
+            font-size: 1.0625rem;
+            color: var(--text-secondary);
+            max-width: 550px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+
+        .feature-card {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-radius: var(--radius);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            padding: 1.75rem 1.5rem;
+            transition: transform 0.25s, box-shadow 0.25s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18), var(--glass-inner);
+        }
+
+        .feature-icon {
+            width: 52px;
+            height: 52px;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-inner);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .feature-card h3 {
+            font-size: 1.0625rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .feature-card p {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* ── HOW IT WORKS ── */
+        .how-section {
+            padding: 5rem 0;
+        }
+
+        .steps-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-top: 0.5rem;
+        }
+
+        .step-card {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-radius: var(--radius);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            padding: 1.5rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .step-number {
+            width: 36px;
+            height: 36px;
+            background: rgba(0, 122, 255, 0.4);
+            border: 1px solid rgba(0, 122, 255, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: 700;
+            margin: 0 auto 1rem;
+        }
+
+        .step-card h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 0.4rem;
+        }
+
+        .step-card p {
+            font-size: 0.8125rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* ── STATS BAR ── */
+        .stats-section {
+            padding: 3rem 0;
+        }
+
+        .stats-bar {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-radius: var(--radius);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            padding: 2rem 1.5rem;
+            text-align: center;
+        }
+
+        .stats-bar .stat-value {
+            font-size: 2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #4facfe, #00f2fe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.3rem;
+        }
+
+        .stats-bar .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        /* ── CTA ── */
+        .cta-section {
+            padding: 5rem 0 3rem;
+        }
+
+        .cta-card {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-radius: var(--radius);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            text-align: center;
+            padding: 3.5rem 2rem;
+        }
+
+        .cta-card h2 {
+            font-size: clamp(1.5rem, 3.5vw, 2rem);
+            font-weight: 800;
+            margin-bottom: 0.75rem;
+        }
+
+        .cta-card p {
+            font-size: 1.0625rem;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* ── FOOTER ── */
+        footer {
+            position: relative;
+            z-index: 10;
+            padding: 2rem 0;
+        }
+
+        .footer-inner {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            padding: 2rem 2rem 1.5rem;
+        }
+
+        .footer-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 2rem;
+        }
+
+        .footer-brand h3 {
+            font-size: 1.125rem;
+            font-weight: 700;
+            margin-bottom: 0.3rem;
+        }
+
+        .footer-brand p {
+            font-size: 0.8125rem;
+            color: var(--text-secondary);
+            max-width: 280px;
+            line-height: 1.5;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 2.5rem;
+        }
+
+        .footer-col h4 {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-tertiary);
+            margin-bottom: 0.75rem;
+        }
+
+        .footer-col a {
+            display: block;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            padding: 0.2rem 0;
+            transition: color 0.15s;
+        }
+
+        .footer-col a:hover {
+            color: var(--text-primary);
+        }
+
+        .footer-bottom {
+            padding-top: 1.25rem;
+            border-top: 1px solid var(--separator);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.75rem;
+            color: var(--text-tertiary);
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .footer-tech {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .tech-tag {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-inner);
+            padding: 0.2rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.6875rem;
+            font-weight: 500;
+        }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 768px) {
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .steps-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .stats-bar {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1.5rem;
+            }
+
+            .navbar-links .nav-link {
+                display: none;
+            }
+
+            .footer-top {
+                flex-direction: column;
+            }
+
+            .footer-links {
+                flex-direction: column;
+                gap: 1.5rem;
+            }
+
+            .formats-bar {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .hero-actions {
+                flex-direction: column;
+                width: 100%;
+            }
+
+            .btn-hero-primary,
+            .btn-hero-secondary {
+                width: 100%;
+                text-align: center;
+            }
+
+            .steps-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wallpaper"></div>
+
+    <!-- ── NAVBAR ── -->
+    <nav class="navbar">
+        <a href="/" class="navbar-brand">
+            <div class="brand-icon">🔬</div>
+            <span>Data Pipeline</span>
+        </a>
+        <div class="navbar-links">
+            <a href="#features" class="nav-link">Features</a>
+            <a href="#how-it-works" class="nav-link">How It Works</a>
+            <a href="{{ url_for('login') }}" class="nav-link">Sign In</a>
+            <a href="{{ url_for('signup') }}" class="btn-cta-nav">Get Started</a>
+            <button class="theme-btn" onclick="toggleTheme()" id="theme-icon">🌙</button>
+        </div>
+    </nav>
+
+    <!-- ── HERO ── -->
+    <section class="hero">
+        <div class="hero-badge">
+            <span class="dot"></span>
+            Hackathon Project · Advanced ML
+        </div>
+        <h1>
+            Clean Your Data<br>
+            <span class="gradient-text">In Seconds, Not Hours</span>
+        </h1>
+        <p class="hero-sub">
+            Upload your CSV or Excel file and let our automated pipeline handle missing values,
+            outliers, feature engineering — and deliver model-ready data instantly.
+        </p>
+        <div class="hero-actions">
+            <a href="{{ url_for('signup') }}" class="btn-hero-primary">🚀 Start Free</a>
+            <a href="#features" class="btn-hero-secondary">Learn More ↓</a>
+        </div>
+        <div class="formats-bar">
+            <span class="formats-label">Supports</span>
+            <span class="format-chip">📄 .CSV</span>
+            <span class="format-chip">📊 .XLSX</span>
+            <span class="format-chip">📋 .XLS</span>
+        </div>
+    </section>
+
+    <!-- ── FEATURES ── -->
+    <section class="features-section" id="features">
+        <div class="container">
+            <div class="section-header">
+                <div class="section-eyebrow">Features</div>
+                <h2 class="section-title">Everything You Need for Clean Data</h2>
+                <p class="section-desc">
+                    From raw datasets to model-ready features — no coding, no guesswork.
+                </p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🧹</div>
+                    <h3>Smart Cleaning</h3>
+                    <p>Automatically removes duplicates, handles missing values with optimal strategies, and fixes data
+                        types.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Exploratory Analysis</h3>
+                    <p>Generates correlation heatmaps, distributions, boxplots and surfaces key insights about your
+                        dataset.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Feature Engineering</h3>
+                    <p>Auto-encodes categoricals, scales numerics, drops low-variance columns and computes feature
+                        importance.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎯</div>
+                    <h3>Target-Aware</h3>
+                    <p>Specify your target column and problem type — the pipeline adapts cleaning and encoding to your
+                        ML task.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📥</div>
+                    <h3>Download Results</h3>
+                    <p>Instantly download cleaned data or the fully-engineered model-ready CSV to plug directly into
+                        your workflow.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Secure & Private</h3>
+                    <p>User authentication with encrypted passwords. Each user's datasets are isolated and protected.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── HOW IT WORKS ── -->
+    <section class="how-section" id="how-it-works">
+        <div class="container">
+            <div class="section-header">
+                <div class="section-eyebrow">Workflow</div>
+                <h2 class="section-title">Four Steps to Clean Data</h2>
+                <p class="section-desc">A simple, automated pipeline from upload to model-ready output.</p>
+            </div>
+            <div class="steps-row">
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <h3>Upload</h3>
+                    <p>Drop your CSV or Excel file into the dashboard</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">2</div>
+                    <h3>Configure</h3>
+                    <p>Set your target column and problem type</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <h3>Process</h3>
+                    <p>Our pipeline cleans, analyzes, and engineers features</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">4</div>
+                    <h3>Download</h3>
+                    <p>Get your model-ready dataset instantly</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── STATS ── -->
+    <section class="stats-section">
+        <div class="container">
+            <div class="stats-bar">
+                <div>
+                    <div class="stat-value">5+</div>
+                    <div class="stat-label">Cleaning Steps</div>
+                </div>
+                <div>
+                    <div class="stat-value">10+</div>
+                    <div class="stat-label">Feature Ops</div>
+                </div>
+                <div>
+                    <div class="stat-value">1GB</div>
+                    <div class="stat-label">Max File Size</div>
+                </div>
+                <div>
+                    <div class="stat-value">100%</div>
+                    <div class="stat-label">Free</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── CTA ── -->
+    <section class="cta-section">
+        <div class="container">
+            <div class="cta-card">
+                <h2>Ready to Clean Your Data?</h2>
+                <p>Create a free account and start processing your datasets in under a minute.</p>
+                <div class="hero-actions">
+                    <a href="{{ url_for('signup') }}" class="btn-hero-primary">🚀 Create Free Account</a>
+                    <a href="{{ url_for('login') }}" class="btn-hero-secondary">Sign In →</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── FOOTER ── -->
+    <footer>
+        <div class="container">
+            <div class="footer-inner">
+                <div class="footer-top">
+                    <div class="footer-brand">
+                        <h3>🔬 Data Pipeline</h3>
+                        <p>Automated data cleaning, EDA, and feature engineering for your next machine learning project.
+                        </p>
+                    </div>
+                    <div class="footer-links">
+                        <div class="footer-col">
+                            <h4>Product</h4>
+                            <a href="#features">Features</a>
+                            <a href="#how-it-works">How It Works</a>
+                            <a href="{{ url_for('signup') }}">Get Started</a>
+                        </div>
+                        <div class="footer-col">
+                            <h4>Tech Stack</h4>
+                            <a href="#">Python & Flask</a>
+                            <a href="#">Pandas & NumPy</a>
+                            <a href="#">Scikit-learn</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="footer-bottom">
+                    <span>© 2026 Data Pipeline Tool. Built for Hackathon.</span>
+                    <div class="footer-tech">
+                        <span class="tech-tag">Flask</span>
+                        <span class="tech-tag">Pandas</span>
+                        <span class="tech-tag">Scikit-learn</span>
+                        <span class="tech-tag">SQLite</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            const next = html.dataset.theme === 'dark' ? 'light' : 'dark';
+            html.dataset.theme = next;
+            localStorage.setItem('theme', next);
+            document.getElementById('theme-icon').textContent = next === 'dark' ? '🌙' : '☀️';
+        }
+        const saved = localStorage.getItem('theme') || 'dark';
+        document.documentElement.dataset.theme = saved;
+        document.getElementById('theme-icon').textContent = saved === 'dark' ? '🌙' : '☀️';
+
+        /* ── Smooth scrolling for anchor links ── */
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href');
+                if (targetId === '#') return;
+                const target = document.querySelector(targetId);
+                if (!target) return;
+                const navbarHeight = 80;
+                const targetPos = target.getBoundingClientRect().top + window.pageYOffset - navbarHeight;
+                window.scrollTo({ top: targetPos, behavior: 'smooth' });
+            });
+        });
+
+        /* ── Smooth scroll-reveal animations with stagger ── */
+        const revealObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('revealed');
+                    revealObserver.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+
+        document.querySelectorAll('.feature-card, .step-card, .stats-bar, .cta-card').forEach((el, i) => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(40px)';
+            el.style.transition = `opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1) ${i * 0.08}s, transform 0.7s cubic-bezier(0.16, 1, 0.3, 1) ${i * 0.08}s`;
+            revealObserver.observe(el);
+        });
+
+        /* Add revealed class style */
+        const style = document.createElement('style');
+        style.textContent = '.revealed { opacity: 1 !important; transform: translateY(0) !important; }';
+        document.head.appendChild(style);
+    </script>
+</body>
+
+</html>

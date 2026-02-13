@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — Data Pipeline</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ───── iOS 26 Liquid Glass Design System ───── */
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.18);
+            --glass-bg-hover: rgba(255, 255, 255, 0.25);
+            --glass-border: rgba(255, 255, 255, 0.35);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+            --glass-blur: blur(60px) saturate(200%);
+            --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+            --text-primary: #fff;
+            --text-secondary: rgba(255, 255, 255, 0.75);
+            --text-tertiary: rgba(255, 255, 255, 0.5);
+            --accent: #007aff;
+            --success: #34c759;
+            --danger: #ff3b30;
+            --radius: 24px;
+            --radius-sm: 14px;
+            --separator: rgba(255, 255, 255, 0.15);
+        }
+
+        [data-theme="light"] {
+            --glass-bg: rgba(255, 255, 255, 0.55);
+            --glass-bg-hover: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.7);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+            --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+            --text-primary: #1c1c1e;
+            --text-secondary: rgba(0, 0, 0, 0.55);
+            --text-tertiary: rgba(0, 0, 0, 0.35);
+            --separator: rgba(0, 0, 0, 0.08);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display', sans-serif;
+            min-height: 100vh;
+            color: var(--text-primary);
+            overflow-x: hidden;
+            transition: color 0.4s;
+        }
+
+        /* ── Wallpaper ── */
+        .wallpaper {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background:
+                radial-gradient(ellipse at 20% 20%, #f5af19 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, #f12711 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, #667eea 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, #764ba2 0%, transparent 50%),
+                linear-gradient(135deg, #f093fb 0%, #f5576c 25%, #4facfe 50%, #00f2fe 75%, #43e97b 100%);
+            background-size: 200% 200%;
+            animation: wallpaperShift 20s ease-in-out infinite;
+        }
+
+        [data-theme="dark"] .wallpaper {
+            background:
+                radial-gradient(ellipse at 30% 30%, #1a1a4e 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 20%, #2d1b69 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, #0c3547 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 70%, #1e3c72 0%, transparent 60%),
+                linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            background-size: 200% 200%;
+        }
+
+        @keyframes wallpaperShift {
+
+            0%,
+            100% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+        }
+
+        /* ── Liquid Glass Navbar ── */
+        .navbar {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-radius: 18px;
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            padding: 0.625rem 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+            height: 54px;
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+            font-size: 1.0625rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .brand-icon {
+            width: 34px;
+            height: 34px;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-inner);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        .navbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+        }
+
+        .theme-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-inner);
+            color: var(--text-primary);
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.15s;
+        }
+
+        .theme-btn:active {
+            transform: scale(0.9);
+        }
+
+        .user-pill {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.3rem 0.75rem 0.3rem 0.3rem;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-inner);
+            border-radius: 20px;
+            font-size: 0.8125rem;
+            font-weight: 500;
+        }
+
+        .user-avatar {
+            width: 28px;
+            height: 28px;
+            background: rgba(0, 122, 255, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+        }
+
+        .btn-logout {
+            color: var(--text-secondary);
+            background: none;
+            border: none;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            padding: 0.4rem 0.6rem;
+            border-radius: 8px;
+            transition: background 0.15s;
+        }
+
+        .btn-logout:hover {
+            background: rgba(255, 59, 48, 0.15);
+            color: #ff453a;
+        }
+
+        /* ── Main Content ── */
+        .main-content {
+            position: relative;
+            z-index: 10;
+            padding: 5rem 1rem 2rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .page-title {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin-bottom: 1.25rem;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        /* ── Liquid Glass Card ── */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-radius: var(--radius);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            margin-bottom: 1rem;
+            overflow: hidden;
+            animation: cardSlide 0.5s ease-out backwards;
+        }
+
+        .glass-card:nth-child(1) {
+            animation-delay: 0.05s;
+        }
+
+        .glass-card:nth-child(2) {
+            animation-delay: 0.1s;
+        }
+
+        .glass-card:nth-child(3) {
+            animation-delay: 0.15s;
+        }
+
+        @keyframes cardSlide {
+            from {
+                opacity: 0;
+                transform: translateY(20px) scale(0.97);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--separator);
+        }
+
+        .card-header h2 {
+            font-size: 1rem;
+            font-weight: 600;
+            flex: 1;
+        }
+
+        .card-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-inner);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.125rem;
+        }
+
+        .card-body {
+            padding: 1rem 1.25rem;
+        }
+
+        /* ── Upload Zone ── */
+        .upload-zone {
+            border: 2px dashed var(--glass-border);
+            border-radius: 18px;
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.25s;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .upload-zone:hover,
+        .upload-zone.dragover {
+            border-color: var(--accent);
+            background: rgba(0, 122, 255, 0.1);
+        }
+
+        .upload-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-text {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .upload-hint {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        /* ── Glass Form Rows ── */
+        .form-list {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-inner);
+            border-radius: var(--radius-sm);
+            margin: 1rem 0;
+            overflow: hidden;
+        }
+
+        .form-row {
+            display: flex;
+            align-items: center;
+            padding: 0 1rem;
+            min-height: 44px;
+            border-bottom: 1px solid var(--separator);
+        }
+
+        .form-row:last-child {
+            border-bottom: none;
+        }
+
+        .form-row label {
+            width: 85px;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .form-row input,
+        .form-row select {
+            flex: 1;
+            background: transparent;
+            border: none;
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            padding: 0.75rem 0;
+            font-family: inherit;
+        }
+
+        .form-row input:focus,
+        .form-row select:focus {
+            outline: none;
+        }
+
+        .form-row input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        .form-row select option {
+            background: #1c1c1e;
+            color: white;
+        }
+
+        /* ── Buttons ── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.625rem 1rem;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--glass-border);
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            font-size: 0.875rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+
+        .btn:active {
+            transform: scale(0.96);
+        }
+
+        .btn:hover {
+            background: var(--glass-bg-hover);
+        }
+
+        .btn-primary {
+            background: rgba(0, 122, 255, 0.5);
+            border-color: rgba(0, 122, 255, 0.4);
+        }
+
+        .btn-primary:hover {
+            background: rgba(0, 122, 255, 0.65);
+        }
+
+        .btn-success {
+            background: rgba(52, 199, 89, 0.4);
+            border-color: rgba(52, 199, 89, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-icon {
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            font-size: 1rem;
+            justify-content: center;
+        }
+
+        /* ── Stats Grid ── */
+        .stats-row {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+        }
+
+        .stat-item {
+            flex: 1;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-inner);
+            border-radius: var(--radius-sm);
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #4facfe, #00f2fe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stat-label {
+            font-size: 0.6875rem;
+            color: var(--text-secondary);
+            margin-top: 0.2rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* ── List Items ── */
+        .list-item {
+            display: flex;
+            align-items: center;
+            padding: 0.875rem 1.25rem;
+            border-bottom: 1px solid var(--separator);
+            transition: background 0.15s;
+        }
+
+        .list-item:last-child {
+            border-bottom: none;
+        }
+
+        .list-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .list-item-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .list-item h3 {
+            font-size: 0.9375rem;
+            font-weight: 600;
+            margin-bottom: 0.2rem;
+        }
+
+        .list-item-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            font-size: 0.8125rem;
+            color: var(--text-secondary);
+        }
+
+        .list-item-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-left: 0.75rem;
+        }
+
+        /* ── Empty State ── */
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1.5rem;
+        }
+
+        .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 0.75rem;
+            opacity: 0.5;
+        }
+
+        .empty-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.3rem;
+        }
+
+        .empty-text {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        /* ── Loading ── */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .loading.visible {
+            display: block;
+        }
+
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid var(--separator);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 0.75rem;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* ── Alerts ── */
+        .alert {
+            padding: 0.75rem 1rem;
+            border-radius: var(--radius-sm);
+            margin-bottom: 1rem;
+            display: none;
+            font-size: 0.875rem;
+            backdrop-filter: var(--glass-blur);
+        }
+
+        .alert.visible {
+            display: block;
+        }
+
+        .alert-error {
+            background: rgba(255, 59, 48, 0.15);
+            border: 1px solid rgba(255, 59, 48, 0.25);
+            color: #ff6b6b;
+        }
+
+        .alert-success {
+            background: rgba(52, 199, 89, 0.15);
+            border: 1px solid rgba(52, 199, 89, 0.25);
+            color: #6ee7b7;
+        }
+
+        .file-info {
+            display: none;
+        }
+
+        .file-info.visible {
+            display: block;
+        }
+
+        #config-section {
+            margin-top: 1rem;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            background: rgba(0, 122, 255, 0.2);
+            border: 1px solid rgba(0, 122, 255, 0.2);
+            border-radius: 6px;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            color: #4facfe;
+        }
+
+        @media (max-width: 600px) {
+            .main-content {
+                padding: 4.5rem 0.75rem 1.5rem;
+            }
+
+            .page-title {
+                font-size: 1.5rem;
+            }
+
+            .navbar {
+                top: 8px;
+                left: 8px;
+                right: 8px;
+            }
+
+            .list-item {
+                flex-wrap: wrap;
+            }
+
+            .list-item-actions {
+                width: 100%;
+                margin: 0.5rem 0 0 0;
+                justify-content: flex-end;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wallpaper"></div>
+
+    <nav class="navbar">
+        <a href="{{ url_for('index') }}" class="navbar-brand">
+            <div class="brand-icon">🔬</div>
+            <span>Data Pipeline</span>
+        </a>
+        <div class="navbar-actions">
+            <a href="{{ url_for('index') }}" class="btn-icon" title="Home"
+                style="width:36px;height:36px;border-radius:50%;background:var(--glass-bg);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);border:1px solid var(--glass-border);box-shadow:var(--glass-inner);display:flex;align-items:center;justify-content:center;font-size:1rem;text-decoration:none;transition:transform 0.15s;">🏠</a>
+            <button class="theme-btn" onclick="toggleTheme()" id="theme-icon">🌙</button>
+            <div class="user-pill">
+                <div class="user-avatar">👤</div>
+                <span>{{ user.username }}</span>
+            </div>
+            <a href="{{ url_for('logout') }}" class="btn-logout">Sign Out</a>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <h1 class="page-title">Dashboard</h1>
+
+        <div id="alert-error" class="alert alert-error"></div>
+        <div id="alert-success" class="alert alert-success"></div>
+
+        <!-- Upload Card -->
+        <div class="glass-card">
+            <div class="card-header">
+                <div class="card-icon">📤</div>
+                <h2>Upload Dataset</h2>
+            </div>
+            <div class="card-body">
+                <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+                    <div class="upload-icon">📁</div>
+                    <div class="upload-text">Drop your file here</div>
+                    <div class="upload-hint">CSV or Excel files supported</div>
+                </div>
+                <input type="file" id="file-input" accept=".csv,.xlsx,.xls">
+
+                <div class="file-info" id="file-info">
+                    <div class="stats-row" id="upload-stats"></div>
+                </div>
+
+                <div id="config-section" style="display: none;">
+                    <div class="form-list">
+                        <div class="form-row">
+                            <label>Name</label>
+                            <input type="text" id="dataset-name" placeholder="Dataset name">
+                        </div>
+                        <div class="form-row">
+                            <label>Target</label>
+                            <select id="target-column">
+                                <option value="">Optional</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <label>Type</label>
+                            <select id="problem-type">
+                                <option value="regression">Regression</option>
+                                <option value="classification">Classification</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" id="process-btn" onclick="processData()" style="width: 100%;">
+                        ⚡ Process Dataset
+                    </button>
+                </div>
+
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p style="color: var(--text-secondary);">Processing your data...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div id="results-section" style="display: none;">
+            <div class="glass-card">
+                <div class="card-header">
+                    <div class="card-icon">✅</div>
+                    <h2>Processing Complete</h2>
+                </div>
+                <div class="card-body">
+                    <div class="stats-row" id="results-stats"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Datasets List -->
+        <div class="glass-card">
+            <div class="card-header">
+                <div class="card-icon">📊</div>
+                <h2>My Datasets</h2>
+                <span class="badge">{{ datasets|length }}</span>
+            </div>
+            {% if datasets %}
+            <div id="datasets-list">
+                {% for dataset in datasets %}
+                <div class="list-item" id="dataset-{{ dataset.id }}">
+                    <div class="list-item-content">
+                        <h3>{{ dataset.name }}</h3>
+                        <div class="list-item-meta">
+                            <span>{{ dataset.original_rows }} rows</span>
+                            <span>{{ dataset.final_cols }} features</span>
+                            <span>{{ dataset.created_at.strftime('%b %d, %H:%M') }}</span>
+                        </div>
+                    </div>
+                    <div class="list-item-actions">
+                        <a href="{{ url_for('view_dataset', dataset_id=dataset.id) }}" class="btn btn-icon"
+                            title="View">👁️</a>
+                        <a href="{{ url_for('download_dataset', dataset_id=dataset.id, file_type='final') }}"
+                            class="btn btn-icon btn-success" title="Download">⬇️</a>
+                        <button class="btn btn-icon" onclick="triggerDelete({{ dataset.id }}, this)"
+                            title="Delete">🗑️</button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">📭</div>
+                <div class="empty-title">No Datasets Yet</div>
+                <div class="empty-text">Upload a CSV to get started</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            const next = html.dataset.theme === 'dark' ? 'light' : 'dark';
+            html.dataset.theme = next;
+            localStorage.setItem('theme', next);
+            document.getElementById('theme-icon').textContent = next === 'dark' ? '🌙' : '☀️';
+        }
+        const saved = localStorage.getItem('theme') || 'dark';
+        document.documentElement.dataset.theme = saved;
+        document.getElementById('theme-icon').textContent = saved === 'dark' ? '🌙' : '☀️';
+
+        let uploadedFilename = '';
+        const uploadZone = document.getElementById('upload-zone');
+        const fileInput = document.getElementById('file-input');
+
+        uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+        uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+        uploadZone.addEventListener('drop', e => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                handleFileUpload(e.dataTransfer.files[0]);
+            }
+        });
+        fileInput.addEventListener('change', e => e.target.files.length && handleFileUpload(e.target.files[0]));
+
+        async function handleFileUpload(file) {
+            uploadedFilename = file.name;
+            const formData = new FormData();
+            formData.append('file', file);
+            try {
+                const res = await fetch('/upload', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.error) return showAlert(data.error, 'error');
+                document.getElementById('file-info').classList.add('visible');
+                document.getElementById('upload-stats').innerHTML = `
+                    <div class="stat-item"><div class="stat-value">${data.shape[0]}</div><div class="stat-label">Rows</div></div>
+                    <div class="stat-item"><div class="stat-value">${data.shape[1]}</div><div class="stat-label">Columns</div></div>
+                `;
+                const sel = document.getElementById('target-column');
+                sel.innerHTML = '<option value="">Optional</option>';
+                data.columns.forEach(c => sel.innerHTML += `<option value="${c}">${c}</option>`);
+                document.getElementById('dataset-name').value = file.name.replace(/\.[^/.]+$/, '');
+                document.getElementById('config-section').style.display = 'block';
+            } catch { showAlert('Upload failed', 'error'); }
+        }
+
+        async function processData() {
+            const btn = document.getElementById('process-btn');
+            document.getElementById('loading').classList.add('visible');
+            btn.disabled = true;
+            try {
+                const res = await fetch('/process', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        dataset_name: document.getElementById('dataset-name').value || 'Untitled',
+                        target_column: document.getElementById('target-column').value,
+                        problem_type: document.getElementById('problem-type').value,
+                        original_filename: uploadedFilename
+                    })
+                });
+                const data = await res.json();
+                if (data.error) return showAlert(data.error, 'error');
+                showAlert('Processing complete! 🎉', 'success');
+                document.getElementById('results-stats').innerHTML = `
+                    <div class="stat-item"><div class="stat-value">${data.cleaning.final_shape[0]}</div><div class="stat-label">Rows</div></div>
+                    <div class="stat-item"><div class="stat-value">${data.feature_engineering.final_shape[1]}</div><div class="stat-label">Features</div></div>
+                `;
+                document.getElementById('results-section').style.display = 'block';
+                setTimeout(() => location.reload(), 1500);
+            } catch { showAlert('Processing failed', 'error'); }
+            finally {
+                document.getElementById('loading').classList.remove('visible');
+                btn.disabled = false;
+            }
+        }
+
+        let deleteTimer;
+
+        async function triggerDelete(id, btn) {
+            if (btn.innerText.includes('🗑️')) {
+                const originalText = btn.innerHTML;
+                const originalBg = btn.style.background;
+
+                btn.innerHTML = '⚠️ Confirm?';
+                btn.style.background = 'rgba(255, 59, 48, 0.2)';
+                btn.style.width = 'auto';
+                btn.style.padding = '0 0.5rem';
+
+                // Reset after 3 seconds
+                deleteTimer = setTimeout(() => {
+                    btn.innerHTML = '🗑️';
+                    btn.style.background = '';
+                    btn.style.width = '36px';
+                    btn.style.padding = '0';
+                }, 3000);
+
+                // Handle click to confirm
+                btn.onclick = () => deleteDataset(id, btn);
+            }
+        }
+
+        async function deleteDataset(id, btn) {
+            // Restore original state just in case
+            if (deleteTimer) clearTimeout(deleteTimer);
+
+            try {
+                const res = await fetch(`/dataset/${id}/delete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success) {
+                        const row = document.getElementById(`dataset-${id}`);
+                        row.style.opacity = '0';
+                        setTimeout(() => row.remove(), 300);
+                        showAlert('Dataset deleted', 'success');
+                        return;
+                    }
+                }
+                showAlert('Deletion failed', 'error');
+            } catch (e) {
+                showAlert('Server error during deletion', 'error');
+            } finally {
+                // Reset button if deletion failed
+                if (document.getElementById(`dataset-${id}`)) {
+                    btn.innerHTML = '🗑️';
+                    btn.style.background = '';
+                    btn.onclick = () => triggerDelete(id, btn);
+                }
+            }
+        }
+
+        function showAlert(msg, type) {
+            const el = document.getElementById(`alert-${type}`);
+            el.textContent = msg;
+            el.classList.add('visible');
+            if (type === 'success') setTimeout(() => el.classList.remove('visible'), 4000);
+        }
+
+        /* ── JWT Auto-Refresh ── */
+        async function refreshAccessToken() {
+            try {
+                const res = await fetch('/api/refresh', { method: 'POST' });
+                if (!res.ok) {
+                    window.location.href = '/login';
+                }
+            } catch {
+                console.warn('Token refresh failed');
+            }
+        }
+        // Refresh access token every 25 minutes (token expires in 30)
+        setInterval(refreshAccessToken, 25 * 60 * 1000);
+    </script>
+</body>
+
+</html>

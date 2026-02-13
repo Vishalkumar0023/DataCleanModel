@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if mode == 'login' %}Sign In{% else %}Sign Up{% endif %} — Data Pipeline</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ───── iOS 26 Liquid Glass Design System ───── */
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.18);
+            --glass-border: rgba(255, 255, 255, 0.35);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+            --glass-blur: blur(60px) saturate(200%);
+            --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+            --text-primary: #fff;
+            --text-secondary: rgba(255, 255, 255, 0.75);
+            --text-tertiary: rgba(255, 255, 255, 0.5);
+            --accent: #007aff;
+            --radius: 24px;
+            --radius-sm: 14px;
+        }
+
+        [data-theme="light"] {
+            --glass-bg: rgba(255, 255, 255, 0.55);
+            --glass-border: rgba(255, 255, 255, 0.7);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+            --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            --text-primary: #1c1c1e;
+            --text-secondary: rgba(0, 0, 0, 0.55);
+            --text-tertiary: rgba(0, 0, 0, 0.35);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-primary);
+            overflow: hidden;
+            transition: color 0.4s;
+        }
+
+        /* ── Wallpaper Background (iOS 26 style) ── */
+        .wallpaper {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background:
+                radial-gradient(ellipse at 20% 20%, #f5af19 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, #f12711 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, #667eea 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, #764ba2 0%, transparent 50%),
+                linear-gradient(135deg, #f093fb 0%, #f5576c 25%, #4facfe 50%, #00f2fe 75%, #43e97b 100%);
+            background-size: 200% 200%;
+            animation: wallpaperShift 20s ease-in-out infinite;
+        }
+
+        [data-theme="dark"] .wallpaper {
+            background:
+                radial-gradient(ellipse at 30% 30%, #1a1a4e 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 20%, #2d1b69 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, #0c3547 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 70%, #1e3c72 0%, transparent 60%),
+                linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            background-size: 200% 200%;
+        }
+
+        @keyframes wallpaperShift {
+
+            0%,
+            100% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+        }
+
+        /* ── Theme Toggle ── */
+        .top-bar {
+            position: fixed;
+            top: 1.25rem;
+            left: 1.25rem;
+            right: 1.25rem;
+            z-index: 100;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .home-link {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 0.9375rem;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            transition: transform 0.15s, background 0.15s;
+        }
+
+        .home-link:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .home-link:active {
+            transform: scale(0.95);
+        }
+
+        .top-bar-right {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .theme-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            color: var(--text-primary);
+            font-size: 1.25rem;
+            cursor: pointer;
+            transition: transform 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .theme-btn:active {
+            transform: scale(0.9);
+        }
+
+        /* ── Main Container ── */
+        .auth-container {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 420px;
+            padding: 1.25rem;
+        }
+
+        /* ── Liquid Glass Card ── */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-radius: var(--radius);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            padding: 2.25rem 2rem;
+            animation: glassFloat 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes glassFloat {
+            from {
+                opacity: 0;
+                transform: translateY(30px) scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* ── Logo ── */
+        .logo {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo-icon {
+            width: 68px;
+            height: 68px;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            margin: 0 auto 1rem;
+        }
+
+        .logo h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .logo p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-top: 0.4rem;
+        }
+
+        /* ── Form ── */
+        .form-group {
+            margin-bottom: 0.875rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.4rem;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--glass-border);
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            color: var(--text-primary);
+            font-size: 1rem;
+            font-family: inherit;
+            box-shadow: var(--glass-inner);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: var(--glass-inner), 0 0 0 3px rgba(0, 122, 255, 0.25);
+        }
+
+        .form-group input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        /* ── Button ── */
+        .btn-primary {
+            width: 100%;
+            padding: 0.9375rem;
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(0, 122, 255, 0.6);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: transform 0.15s, background 0.2s;
+            margin-top: 0.5rem;
+        }
+
+        .btn-primary:hover {
+            background: rgba(0, 122, 255, 0.75);
+        }
+
+        .btn-primary:active {
+            transform: scale(0.97);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        /* ── Misc ── */
+        .switch-mode {
+            text-align: center;
+            margin-top: 1.5rem;
+            color: var(--text-secondary);
+            font-size: 0.9375rem;
+        }
+
+        .switch-mode a {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .alert {
+            padding: 0.75rem 1rem;
+            border-radius: var(--radius-sm);
+            margin-bottom: 1rem;
+            display: none;
+            font-size: 0.9rem;
+            background: rgba(255, 59, 48, 0.2);
+            border: 1px solid rgba(255, 59, 48, 0.3);
+            backdrop-filter: var(--glass-blur);
+            color: #ff6b6b;
+        }
+
+        [data-theme="light"] .alert {
+            color: #ff3b30;
+        }
+
+        .alert.visible {
+            display: block;
+        }
+
+        .features {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-top: 1.75rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid var(--glass-border);
+        }
+
+        .feature {
+            text-align: center;
+        }
+
+        .feature-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.2rem;
+        }
+
+        .feature-text {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wallpaper"></div>
+
+    <div class="top-bar">
+        <a href="{{ url_for('index') }}" class="home-link">🔬 Home</a>
+        <div class="top-bar-right">
+            <button class="theme-btn" onclick="toggleTheme()" id="theme-icon">🌙</button>
+        </div>
+    </div>
+
+    <div class="auth-container">
+        <div class="glass-card">
+            <div class="logo">
+                <div class="logo-icon">🔬</div>
+                <h1>Data Pipeline</h1>
+                <p>{% if mode == 'login' %}Welcome back{% else %}Create your account{% endif %}</p>
+            </div>
+
+            <div id="alert" class="alert"></div>
+
+            <form id="auth-form">
+                {% if mode == 'signup' %}
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="email" name="email" required placeholder="you@example.com">
+                </div>
+                {% endif %}
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="username" name="username" required placeholder="Enter username">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="password" name="password" required placeholder="••••••••" minlength="6">
+                </div>
+                <button type="submit" class="btn-primary" id="submit-btn">
+                    {% if mode == 'login' %}Sign In{% else %}Create Account{% endif %}
+                </button>
+            </form>
+
+            <div class="switch-mode">
+                {% if mode == 'login' %}
+                Don't have an account? <a href="{{ url_for('signup') }}">Sign up</a>
+                {% else %}
+                Already have an account? <a href="{{ url_for('login') }}">Sign in</a>
+                {% endif %}
+            </div>
+
+            <div class="features">
+                <div class="feature">
+                    <div class="feature-icon">🧹</div>
+                    <div class="feature-text">Clean</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">📊</div>
+                    <div class="feature-text">Analyze</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">⚡</div>
+                    <div class="feature-text">Transform</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            const next = html.dataset.theme === 'dark' ? 'light' : 'dark';
+            html.dataset.theme = next;
+            localStorage.setItem('theme', next);
+            document.getElementById('theme-icon').textContent = next === 'dark' ? '🌙' : '☀️';
+        }
+        const saved = localStorage.getItem('theme') || 'dark';
+        document.documentElement.dataset.theme = saved;
+        document.getElementById('theme-icon').textContent = saved === 'dark' ? '🌙' : '☀️';
+
+        const form = document.getElementById('auth-form');
+        const alertEl = document.getElementById('alert');
+        const submitBtn = document.getElementById('submit-btn');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Please wait...';
+            alertEl.classList.remove('visible');
+            const data = Object.fromEntries(new FormData(form).entries());
+            try {
+                const res = await fetch(window.location.href, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (result.success) {
+                    submitBtn.textContent = 'Success ✓';
+                    setTimeout(() => window.location.href = result.redirect, 400);
+                } else {
+                    alertEl.textContent = result.error || 'Something went wrong';
+                    alertEl.classList.add('visible');
+                    submitBtn.textContent = '{% if mode == "login" %}Sign In{% else %}Create Account{% endif %}';
+                    submitBtn.disabled = false;
+                }
+            } catch {
+                alertEl.textContent = 'Connection error';
+                alertEl.classList.add('visible');
+                submitBtn.textContent = '{% if mode == "login" %}Sign In{% else %}Create Account{% endif %}';
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+
+</html>

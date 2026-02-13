@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ dataset.name }} — Data Pipeline</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ───── iOS 26 Liquid Glass Design System ───── */
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.18);
+            --glass-bg-hover: rgba(255, 255, 255, 0.25);
+            --glass-border: rgba(255, 255, 255, 0.35);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+            --glass-blur: blur(60px) saturate(200%);
+            --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+            --text-primary: #fff;
+            --text-secondary: rgba(255, 255, 255, 0.75);
+            --text-tertiary: rgba(255, 255, 255, 0.5);
+            --accent: #007aff;
+            --success: #34c759;
+            --radius: 24px;
+            --radius-sm: 14px;
+            --separator: rgba(255, 255, 255, 0.15);
+        }
+
+        [data-theme="light"] {
+            --glass-bg: rgba(255, 255, 255, 0.55);
+            --glass-bg-hover: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.7);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+            --glass-inner: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+            --text-primary: #1c1c1e;
+            --text-secondary: rgba(0, 0, 0, 0.55);
+            --text-tertiary: rgba(0, 0, 0, 0.35);
+            --separator: rgba(0, 0, 0, 0.08);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display', sans-serif;
+            min-height: 100vh;
+            color: var(--text-primary);
+            overflow-x: hidden;
+            transition: color 0.4s;
+        }
+
+        /* ── Wallpaper ── */
+        .wallpaper {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background:
+                radial-gradient(ellipse at 20% 20%, #f5af19 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, #f12711 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, #667eea 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, #764ba2 0%, transparent 50%),
+                linear-gradient(135deg, #f093fb 0%, #f5576c 25%, #4facfe 50%, #00f2fe 75%, #43e97b 100%);
+            background-size: 200% 200%;
+            animation: wallpaperShift 20s ease-in-out infinite;
+        }
+
+        [data-theme="dark"] .wallpaper {
+            background:
+                radial-gradient(ellipse at 30% 30%, #1a1a4e 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 20%, #2d1b69 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, #0c3547 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 70%, #1e3c72 0%, transparent 60%),
+                linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            background-size: 200% 200%;
+        }
+
+        @keyframes wallpaperShift {
+
+            0%,
+            100% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+        }
+
+        /* ── Navbar ── */
+        .navbar {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-radius: 18px;
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            padding: 0.625rem 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+            height: 54px;
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+            font-size: 1.0625rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .brand-icon {
+            width: 34px;
+            height: 34px;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-inner);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        .navbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+        }
+
+        .theme-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-inner);
+            color: var(--text-primary);
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.15s;
+        }
+
+        .theme-btn:active {
+            transform: scale(0.9);
+        }
+
+        .btn-back {
+            color: var(--accent);
+            background: none;
+            border: none;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            text-decoration: none;
+        }
+
+        /* ── Main ── */
+        .main-content {
+            position: relative;
+            z-index: 10;
+            padding: 5rem 1rem 2rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        /* ── Page Header ── */
+        .page-header {
+            margin-bottom: 1.25rem;
+            animation: fadeUp 0.5s ease-out;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(15px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .breadcrumb {
+            font-size: 0.8125rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.4rem;
+        }
+
+        .breadcrumb a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .page-title {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .page-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            font-size: 0.8125rem;
+            color: var(--text-secondary);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            background: rgba(0, 122, 255, 0.2);
+            border: 1px solid rgba(0, 122, 255, 0.2);
+            border-radius: 6px;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            color: #4facfe;
+        }
+
+        .badge.green {
+            background: rgba(52, 199, 89, 0.2);
+            border-color: rgba(52, 199, 89, 0.2);
+            color: #6ee7b7;
+        }
+
+        /* ── Buttons ── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.625rem 1rem;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--glass-border);
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            font-size: 0.8125rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+
+        .btn:active {
+            transform: scale(0.96);
+        }
+
+        .btn:hover {
+            background: var(--glass-bg-hover);
+        }
+
+        .btn-success {
+            background: rgba(52, 199, 89, 0.4);
+            border-color: rgba(52, 199, 89, 0.3);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
+        /* ── Glass Card ── */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-radius: var(--radius);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+            margin-bottom: 1rem;
+            overflow: hidden;
+            animation: cardSlide 0.5s ease-out backwards;
+        }
+
+        .glass-card:nth-child(1) {
+            animation-delay: 0.05s;
+        }
+
+        .glass-card:nth-child(2) {
+            animation-delay: 0.1s;
+        }
+
+        .glass-card:nth-child(3) {
+            animation-delay: 0.15s;
+        }
+
+        @keyframes cardSlide {
+            from {
+                opacity: 0;
+                transform: translateY(20px) scale(0.97);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--separator);
+        }
+
+        .card-header h2 {
+            font-size: 1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-body {
+            padding: 1rem 1.25rem;
+        }
+
+        /* ── Stats ── */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.625rem;
+        }
+
+        .stat-item {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-inner);
+            border-radius: var(--radius-sm);
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.375rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #4facfe, #00f2fe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stat-value.green {
+            background: linear-gradient(135deg, #34c759, #6ee7b7);
+            -webkit-background-clip: text;
+        }
+
+        .stat-label {
+            font-size: 0.6875rem;
+            color: var(--text-secondary);
+            margin-top: 0.2rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* ── Segmented Tabs ── */
+        .tab-bar {
+            display: flex;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-inner);
+            border-radius: var(--radius-sm);
+            padding: 3px;
+            margin-bottom: 1rem;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 0.625rem 0.75rem;
+            background: transparent;
+            border: none;
+            border-radius: 11px;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .tab.active {
+            background: var(--glass-bg-hover);
+            color: var(--text-primary);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow), var(--glass-inner);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* ── Tags ── */
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            margin-bottom: 0.875rem;
+        }
+
+        .tag {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-inner);
+            padding: 0.3rem 0.625rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
+        }
+
+        .tag.more {
+            color: #ff9f0a;
+        }
+
+        /* ── Table ── */
+        .table-wrap {
+            overflow-x: auto;
+            border-radius: 12px;
+            border: 1px solid var(--separator);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.75rem;
+        }
+
+        th,
+        td {
+            padding: 0.625rem 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--separator);
+            white-space: nowrap;
+        }
+
+        th {
+            background: rgba(0, 0, 0, 0.15);
+            font-size: 0.625rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: sticky;
+            top: 0;
+        }
+
+        [data-theme="light"] th {
+            background: rgba(0, 0, 0, 0.04);
+        }
+
+        tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .scroll-container {
+            max-height: 320px;
+            overflow-y: auto;
+        }
+
+        .scroll-container::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .scroll-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .scroll-container::-webkit-scrollbar-thumb {
+            background: var(--glass-border);
+            border-radius: 3px;
+        }
+
+        /* ── Operations List ── */
+        .ops-list {
+            list-style: none;
+        }
+
+        .ops-list li {
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--separator);
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+            font-size: 0.875rem;
+            animation: itemSlide 0.3s ease-out backwards;
+        }
+
+        .ops-list li:nth-child(1) {
+            animation-delay: 0.05s;
+        }
+
+        .ops-list li:nth-child(2) {
+            animation-delay: 0.1s;
+        }
+
+        .ops-list li:nth-child(3) {
+            animation-delay: 0.15s;
+        }
+
+        .ops-list li:nth-child(4) {
+            animation-delay: 0.2s;
+        }
+
+        @keyframes itemSlide {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .ops-list li:last-child {
+            border-bottom: none;
+        }
+
+        .check-icon {
+            color: var(--success);
+            font-size: 1rem;
+        }
+
+        .muted {
+            color: var(--text-secondary);
+        }
+
+        @media (max-width: 600px) {
+            .main-content {
+                padding: 4.5rem 0.75rem 1.5rem;
+            }
+
+            .navbar {
+                top: 8px;
+                left: 8px;
+                right: 8px;
+            }
+
+            .page-title {
+                font-size: 1.5rem;
+            }
+
+            .stats-row {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .btn-group {
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wallpaper"></div>
+
+    <nav class="navbar">
+        <a href="{{ url_for('index') }}" class="navbar-brand">
+            <div class="brand-icon">🔬</div>
+            <span>Data Pipeline</span>
+        </a>
+        <div class="navbar-actions">
+            <a href="{{ url_for('index') }}"
+                style="width:36px;height:36px;border-radius:50%;background:var(--glass-bg);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);border:1px solid var(--glass-border);box-shadow:var(--glass-inner);display:flex;align-items:center;justify-content:center;font-size:1rem;text-decoration:none;transition:transform 0.15s;"
+                title="Home">🏠</a>
+            <button class="theme-btn" onclick="toggleTheme()" id="theme-icon">🌙</button>
+            <a href="{{ url_for('dashboard') }}" class="btn-back">‹ Back</a>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="page-header">
+            <div class="breadcrumb">
+                <a href="{{ url_for('dashboard') }}">Dashboard</a> / {{ dataset.name }}
+            </div>
+            <h1 class="page-title">{{ dataset.name }}</h1>
+            <div class="page-meta">
+                <span>📄 {{ dataset.original_filename }}</span>
+                <span>🎯 {{ dataset.target_column or 'No target' }}</span>
+                <span class="badge">{{ dataset.problem_type or 'N/A' }}</span>
+            </div>
+            <div class="btn-group">
+                <a href="{{ url_for('download_dataset', dataset_id=dataset.id, file_type='cleaned') }}" class="btn">📥 Cleaned (CSV)</a>
+                <a href="{{ url_for('download_dataset', dataset_id=dataset.id, file_type='cleaned', format='xlsx') }}" class="btn">📊 Cleaned (Excel)</a>
+                <a href="{{ url_for('download_dataset', dataset_id=dataset.id, file_type='final') }}" class="btn btn-success">⬇️ Model-Ready (CSV)</a>
+                <a href="{{ url_for('download_dataset', dataset_id=dataset.id, file_type='final', format='xlsx') }}" class="btn btn-success" style="background:rgba(52, 199, 89, 0.25); border-color:rgba(52, 199, 89, 0.2);">📊 Model-Ready (Excel)</a>
+                <button class="btn" id="train-btn" onclick="trainModel()"
+                    style="background:linear-gradient(135deg,#667eea,#764ba2);border:none;cursor:pointer;">🧠 Train
+                    Model</button>
+
+                <button class="btn" onclick="triggerDelete({{ dataset.id }}, this)"
+                    style="background:rgba(255,59,48,0.15);color:#ff453a;border:1px solid rgba(255,59,48,0.25);">🗑️
+                    Delete</button>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="glass-card">
+            <div class="card-body">
+                <div class="stats-row">
+                    <div class="stat-item">
+                        <div class="stat-value">{{ dataset.original_rows | default(0) }}</div>
+                        <div class="stat-label">Original</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value green">{{ dataset.cleaned_rows | default(0) }}</div>
+                        <div class="stat-label">Cleaned</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">{{ dataset.original_cols | default(0) }}</div>
+                        <div class="stat-label">Columns</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value green">{{ dataset.final_cols | default(0) }}</div>
+                        <div class="stat-label">Features</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tab-bar">
+            <button class="tab active" onclick="showTab('cleaned')">🧹 Cleaned</button>
+            <button class="tab" onclick="showTab('final')">⚡ Model-Ready</button>
+            <button class="tab" onclick="showTab('ops')">📋 Log</button>
+            <button class="tab" id="ml-tab" onclick="showTab('ml')" style="display:none;">🧠 ML Results</button>
+        </div>
+
+        <!-- Cleaned Tab -->
+        <div id="tab-cleaned" class="tab-content active">
+            <div class="glass-card">
+                <div class="card-header">
+                    <h2>🧹 Cleaned Data</h2>
+                    <span class="badge green">{{ cleaned_columns | length }} cols</span>
+                </div>
+                <div class="card-body">
+                    <div class="tags">
+                        {% for col in cleaned_columns[:10] %}
+                        <span class="tag">{{ col }}</span>
+                        {% endfor %}
+                        {% if cleaned_columns | length > 10 %}
+                        <span class="tag more">+{{ cleaned_columns | length - 10 }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="table-wrap scroll-container">
+                        <table>
+                            <thead>
+                                <tr>{% for col in cleaned_columns %}<th>{{ col }}</th>{% endfor %}</tr>
+                            </thead>
+                            <tbody>
+                                {% for row in cleaned_sample %}
+                                <tr>{% for col in cleaned_columns %}<td>{{ row[col] if row[col] is not none else '—' }}
+                                    </td>{% endfor %}</tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Final Tab -->
+        <div id="tab-final" class="tab-content">
+            <div class="glass-card">
+                <div class="card-header">
+                    <h2>⚡ Model-Ready Data</h2>
+                    <span class="badge">{{ final_columns | length }} features</span>
+                </div>
+                <div class="card-body">
+                    <div class="tags">
+                        {% for col in final_columns[:10] %}
+                        <span class="tag">{{ col }}</span>
+                        {% endfor %}
+                        {% if final_columns | length > 10 %}
+                        <span class="tag more">+{{ final_columns | length - 10 }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="table-wrap scroll-container">
+                        <table>
+                            <thead>
+                                <tr>{% for col in final_columns %}<th>{{ col }}</th>{% endfor %}</tr>
+                            </thead>
+                            <tbody>
+                                {% for row in final_sample %}
+                                <tr>{% for col in final_columns %}<td>{{ "%.3f"|format(row[col]) if row[col] is number
+                                        else (row[col] if row[col] is not none else '—') }}</td>{% endfor %}</tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Operations Tab -->
+        <div id="tab-ops" class="tab-content">
+            <div class="glass-card">
+                <div class="card-header">
+                    <h2>🧹 Cleaning Operations</h2>
+                </div>
+                <div class="card-body">
+                    <ul class="ops-list">
+                        {% for op in processing_log.get('cleaning', []) %}
+                        <li><span class="check-icon">✓</span> {{ op }}</li>
+                        {% else %}
+                        <li class="muted">No cleaning operations recorded</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            <div class="glass-card">
+                <div class="card-header">
+                    <h2>⚡ Feature Engineering</h2>
+                </div>
+                <div class="card-body">
+                    <ul class="ops-list">
+                        {% for t in processing_log.get('feature_engineering', []) %}
+                        <li><span class="check-icon">✓</span> {{ t }}</li>
+                        {% else %}
+                        <li class="muted">No feature engineering recorded</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- ML Results Tab -->
+        <div id="tab-ml" class="tab-content">
+            <div id="ml-loading" style="display:none;text-align:center;padding:3rem;">
+                <div style="font-size:3rem;animation:spin 1s linear infinite;display:inline-block;">⚙️</div>
+                <p style="margin-top:1rem;color:var(--text-secondary);">Training models... This may take a minute.</p>
+                <style>
+                    @keyframes spin {
+                        from {
+                            transform: rotate(0deg)
+                        }
+
+                        to {
+                            transform: rotate(360deg)
+                        }
+                    }
+                </style>
+            </div>
+            <div id="ml-results" style="display:none;"></div>
+            <div id="ml-error" style="display:none;" class="glass-card">
+                <div class="card-body" style="text-align:center;padding:2rem;">
+                    <div style="font-size:2rem;">❌</div>
+                    <p id="ml-error-msg" style="margin-top:0.5rem;color:#ff6b6b;"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            const next = html.dataset.theme === 'dark' ? 'light' : 'dark';
+            html.dataset.theme = next;
+            localStorage.setItem('theme', next);
+            document.getElementById('theme-icon').textContent = next === 'dark' ? '🌙' : '☀️';
+        }
+        const saved = localStorage.getItem('theme') || 'dark';
+        document.documentElement.dataset.theme = saved;
+        document.getElementById('theme-icon').textContent = saved === 'dark' ? '🌙' : '☀️';
+
+        function showTab(name) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-' + name).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        /* ── ML Training ── */
+        async function trainModel() {
+            const btn = document.getElementById('train-btn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Training...';
+
+            // Show ML tab
+            document.getElementById('ml-tab').style.display = '';
+            showTab('ml');
+            document.getElementById('ml-tab').classList.add('active');
+            document.getElementById('ml-loading').style.display = 'block';
+            document.getElementById('ml-results').style.display = 'none';
+            document.getElementById('ml-error').style.display = 'none';
+
+            try {
+                const res = await fetch('/dataset/{{ dataset.id }}/train', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        target_column: '{{ dataset.target_column or "" }}',
+                        problem_type: '{{ dataset.problem_type or "" }}'
+                    })
+                });
+                const data = await res.json();
+                document.getElementById('ml-loading').style.display = 'none';
+
+                if (data.success) {
+                    btn.textContent = '✅ Trained';
+                    renderMLResults(data.results);
+                } else {
+                    btn.textContent = '🧠 Train Model';
+                    btn.disabled = false;
+                    document.getElementById('ml-error').style.display = 'block';
+                    document.getElementById('ml-error-msg').textContent = data.error || 'Training failed';
+                }
+            } catch (e) {
+                document.getElementById('ml-loading').style.display = 'none';
+                document.getElementById('ml-error').style.display = 'block';
+                document.getElementById('ml-error-msg').textContent = e.message;
+                btn.textContent = '🧠 Train Model';
+                btn.disabled = false;
+            }
+        }
+
+        function renderMLResults(r) {
+            const container = document.getElementById('ml-results');
+            const best = r.best_model || {};
+            const rel = r.reliability || {};
+            const imp = r.feature_importance || {};
+            const warns = r.warnings || [];
+            const models = r.models_compared || {};
+            const isClassification = r.problem_type === 'classification';
+
+            // Grade color
+            const gradeColors = { A: '#34c759', B: '#007aff', C: '#ff9500', D: '#ff3b30' };
+            const gradeColor = gradeColors[rel.grade] || '#888';
+
+            // Build metrics table rows
+            let metricsHTML = '';
+            for (const [name, info] of Object.entries(models)) {
+                if (info.error) {
+                    metricsHTML += `<tr><td>${name}</td><td colspan="5" style="color:#ff6b6b;">Failed: ${info.error.substring(0, 60)}</td></tr>`;
+                    continue;
+                }
+                const m = info.metrics || {};
+                const cells = Object.entries(m).map(([k, v]) =>
+                    `<td>${v.mean !== undefined ? v.mean.toFixed(4) : '—'}<br><small style="color:var(--text-tertiary)">±${v.std !== undefined ? v.std.toFixed(4) : ''}</small></td>`
+                ).join('');
+                const isBest = name === best.name;
+                metricsHTML += `<tr style="${isBest ? 'background:rgba(52,199,89,0.12);' : ''}">
+                    <td>${isBest ? '🏆 ' : ''}${name}</td>${cells}</tr>`;
+            }
+
+            // Metric headers
+            const firstModel = Object.values(models).find(m => m.metrics);
+            let metricHeaders = '';
+            if (firstModel) {
+                metricHeaders = Object.keys(firstModel.metrics).map(k => `<th>${k.replace(/_/g, ' ')}</th>`).join('');
+            }
+
+            // Feature importance bars
+            const maxImp = Math.max(...Object.values(imp), 0.001);
+            let impHTML = Object.entries(imp).map(([feat, val]) => {
+                const pct = (val / maxImp * 100).toFixed(1);
+                return `<div style="margin-bottom:0.5rem;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:2px;">
+                        <span>${feat}</span><span>${val.toFixed(4)}</span>
+                    </div>
+                    <div style="height:6px;background:var(--glass-bg);border-radius:3px;overflow:hidden;">
+                        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:3px;transition:width 0.6s;"></div>
+                    </div>
+                </div>`;
+            }).join('');
+
+            // Warnings
+            let warnHTML = warns.length ? warns.map(w => `<div style="padding:0.5rem 0.75rem;background:rgba(255,149,0,0.1);border-radius:8px;margin-bottom:0.5rem;font-size:0.85rem;">⚠️ ${w}</div>`).join('') : '';
+
+            container.innerHTML = `
+                <!-- Best Model + Reliability -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+                    <div class="glass-card">
+                        <div class="card-header"><h2>🏆 Best Model</h2></div>
+                        <div class="card-body" style="text-align:center;">
+                            <div style="font-size:1.5rem;font-weight:700;">${best.name || 'N/A'}</div>
+                            <div style="margin-top:0.5rem;color:var(--text-secondary);">${r.problem_type || ''} · ${r.target_column || ''}</div>
+                            <div style="margin-top:1rem;display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;">
+                                <a href="/dataset/{{ dataset.id }}/download/model" class="btn btn-success" style="font-size:0.85rem;">📦 Download Model (.pkl)</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="glass-card">
+                        <div class="card-header"><h2>📊 Reliability</h2></div>
+                        <div class="card-body" style="text-align:center;">
+                            <div style="font-size:3rem;font-weight:800;color:${gradeColor};">${rel.grade || '?'}</div>
+                            <div style="font-size:1.1rem;color:var(--text-secondary);">${rel.score || 0}/100</div>
+                            <div style="margin-top:0.75rem;font-size:0.8rem;color:var(--text-tertiary);">
+                                ${(rel.reasons || []).join(' · ')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                ${warnHTML ? '<div class="glass-card"><div class="card-body">' + warnHTML + '</div></div>' : ''}
+
+                <!-- Metrics Table -->
+                <div class="glass-card" style="margin-bottom:1rem;">
+                    <div class="card-header"><h2>📈 Model Comparison</h2></div>
+                    <div class="card-body">
+                        <div class="table-wrap scroll-container">
+                            <table>
+                                <thead><tr><th>Model</th>${metricHeaders}</tr></thead>
+                                <tbody>${metricsHTML}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Feature Importance -->
+                <div class="glass-card">
+                    <div class="card-header"><h2>🔑 Top Feature Importance</h2></div>
+                    <div class="card-body">${impHTML || '<p class="muted">No feature importance available</p>'}</div>
+                </div>
+            `;
+            container.style.display = 'block';
+        }
+
+        /* ── Delete Functionality ── */
+        let deleteTimer;
+
+        function triggerDelete(id, btn) {
+            if (btn.innerText.includes('Delete')) {
+                const originalText = btn.innerHTML;
+                const originalBg = btn.style.background;
+
+                btn.innerHTML = '⚠️ Confirm?';
+                btn.style.background = 'rgba(255, 59, 48, 0.4)';
+                btn.style.color = '#fff';
+
+                // Reset after 3 seconds
+                deleteTimer = setTimeout(() => {
+                    btn.innerHTML = '🗑️ Delete';
+                    btn.style.background = 'rgba(255,59,48,0.15)';
+                    btn.style.color = '#ff453a';
+                }, 3000);
+
+                // Handle click to confirm
+                btn.onclick = () => deleteDataset(id, btn);
+            }
+        }
+
+        async function deleteDataset(id, btn) {
+            if (deleteTimer) clearTimeout(deleteTimer);
+
+            try {
+                btn.disabled = true;
+                btn.innerHTML = '⏳ Deleting...';
+
+                const res = await fetch(`/dataset/${id}/delete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success) {
+                        window.location.href = '/dashboard';
+                        return;
+                    }
+                }
+                alert('Deletion failed');
+            } catch (e) {
+                alert('Server error during deletion');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '🗑️ Delete';
+                    btn.style.background = 'rgba(255,59,48,0.15)';
+                    btn.style.color = '#ff453a';
+                    btn.onclick = () => triggerDelete(id, btn);
+                }
+            }
+        }
+
+        /* ── JWT Auto-Refresh ── */
+        async function refreshAccessToken() {
+            try {
+                const res = await fetch('/api/refresh', { method: 'POST' });
+                if (!res.ok) {
+                    window.location.href = '/login';
+                }
+            } catch {
+                console.warn('Token refresh failed');
+            }
+        }
+        setInterval(refreshAccessToken, 25 * 60 * 1000);
+    </script>
+</body>
+
+</html>
