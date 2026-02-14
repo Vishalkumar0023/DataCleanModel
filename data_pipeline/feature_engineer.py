@@ -500,6 +500,78 @@ class FeatureEngineer:
         except Exception as e:
             self.transformations.append(f"Could not handle imbalance: {e}")
         
+        except Exception as e:
+            self.transformations.append(f"Could not handle imbalance: {e}")
+        
+        return self
+
+    def auto_evolve(self, max_new_features: int = 10) -> 'FeatureEngineer':
+        """
+        Automatically generate and select best interaction features ("Super Features").
+        """
+        if self.target_col is None:
+            return self
+
+        # 1. Identify top numeric features
+        if not self.feature_importance:
+            self.compute_feature_importance()
+        
+        # Filter for numeric only
+        numeric_cols = self.df.select_dtypes(include=[np.number]).columns.tolist()
+        if self.target_col in numeric_cols:
+            numeric_cols.remove(self.target_col)
+
+        # Get top features from importance
+        top_features = [f for f in self.feature_importance.keys() if f in numeric_cols][:5]
+        
+        if len(top_features) < 2:
+            return self
+            
+        initial_features = set(self.df.columns)
+
+        # 2. Generate interactions
+        # We use PolynomialFeatures with interaction_only=True to get A*B terms
+        poly = PolynomialFeatures(degree=2, interaction_only=True, include_bias=False)
+        try:
+            poly_data = poly.fit_transform(self.df[top_features])
+            new_feature_names = poly.get_feature_names_out(top_features)
+            
+            # Add new features to df
+            # Skip the first len(top_features) as they are the original ones
+            new_feats = new_feature_names[len(top_features):]
+            new_data = poly_data[:, len(top_features):]
+            
+            created_features = []
+            for i, feat_name in enumerate(new_feats):
+                # Clean name (replace spaces with _)
+                clean_name = feat_name.replace(' ', '_x_')
+                self.df[clean_name] = new_data[:, i]
+                created_features.append(clean_name)
+                
+            # 3. Re-evaluate importance
+            self.compute_feature_importance()
+            
+            # 4. Filter: Keep only features that have decent importance
+            # Threshold: median importance of original features? or just > 0.01?
+            # Let's simple keep top N new features
+            new_feat_importance = {f: self.feature_importance.get(f, 0) for f in created_features}
+            
+            # Sort by importance
+            sorted_new = sorted(new_feat_importance.items(), key=lambda x: x[1], reverse=True)
+            
+            # Keep top max_new_features
+            keep_features = [f for f, imp in sorted_new[:max_new_features] if imp > 0.001]
+            drop_features = [f for f in created_features if f not in keep_features]
+            
+            if drop_features:
+                self.df = self.df.drop(columns=drop_features)
+            
+            if keep_features:
+                self.transformations.append(f"Auto-evolved {len(keep_features)} new interaction features: {', '.join(keep_features[:3])}...")
+        
+        except Exception as e:
+            self.transformations.append(f"Auto-evolution failed: {e}")
+            
         return self
     
     def get_transformed_data(self) -> pd.DataFrame:

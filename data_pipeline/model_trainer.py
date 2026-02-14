@@ -643,7 +643,8 @@ class ModelTrainer:
             'feature_importance': self.get_feature_importance(),
             'reliability': self.get_reliability_score(),
             'warnings': self.warnings,
-            'log': self.log
+            'log': self.log,
+            'explanation': self.explain_model()  # Add explanation
         }
 
         # Per-model summary
@@ -656,6 +657,91 @@ class ModelTrainer:
                     'best_params': result['best_params']
                 }
 
+        return dashboard
+
+    # ─── 15. Explainability (SHAP) ─────────────────────────────────────
+    def explain_model(self) -> Dict[str, Any]:
+        """Generate SHAP explanations for the best model."""
+        if self.best_model is None or self.X is None:
+            return {}
+
+        try:
+            import shap
+            import matplotlib.pyplot as plt
+            import io
+            import base64
+            
+            # Use a small sample for speed
+            sample_size = min(100, len(self.X))
+            X_sample = self.X[:sample_size]
+            
+            # Choose explainer
+            # Tree models vs Linear vs Generic
+            model_type = type(self.best_model).__name__
+            if 'Forest' in model_type or 'Boost' in model_type or 'Tree' in model_type or 'XGB' in model_type:
+                explainer = shap.TreeExplainer(self.best_model)
+            elif 'Linear' in model_type or 'Ridge' in model_type or 'Logistic' in model_type:
+                explainer = shap.LinearExplainer(self.best_model, X_sample)
+            else:
+                explainer = shap.KernelExplainer(self.best_model.predict, X_sample)
+
+            shap_values = explainer.shap_values(X_sample)
+            
+            # Handling classification (list of arrays) vs regression (array)
+            if isinstance(shap_values, list):
+                # binary classification -> take index 1 (positive class)
+                # multi-class -> take index 1 just for demo
+                shap_vals = shap_values[1] if len(shap_values) > 1 else shap_values[0]
+            else:
+                shap_vals = shap_values
+
+            # PLOT 1: Summary Plot (Bar)
+            fig, ax = plt.subplots(figsize=(10, 6))
+            shap.summary_plot(shap_vals, X_sample, feature_names=self.feature_names, plot_type="bar", show=False)
+            summary_bar = self._fig_to_base64(fig)
+            plt.close(fig)
+
+            # PLOT 2: Summary Plot (Dot/Beeswarm)
+            fig, ax = plt.subplots(figsize=(10, 6))
+            shap.summary_plot(shap_vals, X_sample, feature_names=self.feature_names, show=False)
+            summary_dot = self._fig_to_base64(fig)
+            plt.close(fig)
+            
+            return {
+                'summary_bar': summary_bar,
+                'summary_dot': summary_dot,
+                'available': True
+            }
+
+        except Exception as e:
+            self.log.append(f"SHAP explanation failed: {e}")
+            return {'error': str(e), 'available': False}
+
+    def _fig_to_base64(self, fig) -> str:
+        """Convert matplotlib figure to base64 string."""
+        import io
+        import base64
+        buffer = io.BytesIO()
+        fig.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
+        buffer.seek(0)
+        img_str = base64.b64encode(buffer.getvalue()).decode()
+        return f"data:image/png;base64,{img_str}"
+
+    # ─── 14. Full Pipeline Run ─────────────────────────────────────────
+    def run(self) -> Dict[str, Any]:
+        """
+        Run the full ML training pipeline:
+        1. Detect target & problem type
+        2. Prepare features
+        3. Train all models with CV + tuning
+        4. Select best model
+        5. Get feature importance
+        6. Build metrics dashboard
+        """
+        self.prepare_features()
+        self.train_all_models()
+        self.get_best_model() # Ensure best model is selected
+        dashboard = self.get_metrics_dashboard()
         return dashboard
 
     # ─── 10. Reliability Score ─────────────────────────────────────────

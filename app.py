@@ -651,13 +651,20 @@ def view_dataset(dataset_id):
     except Exception as e:
         print(f"Error loading dataset samples: {e}")
         
+    # Get other datasets for drift comparison
+    other_datasets = Dataset.query.filter(
+        Dataset.user_id == g.current_user.id,
+        Dataset.id != dataset_id
+    ).all()
+        
     return render_template('view_dataset.html', 
         dataset=dataset,
         cleaned_columns=cleaned_columns,
         cleaned_sample=cleaned_sample,
         final_columns=final_columns,
         final_sample=final_sample,
-        processing_log=json.loads(dataset.processing_log) if dataset.processing_log else {}
+        processing_log=json.loads(dataset.processing_log) if dataset.processing_log else {},
+        other_datasets=other_datasets
     )
 
 
@@ -1207,12 +1214,157 @@ def predict_user_model():
 # RUN APP
 # ==============================================================================
 
+@app.route('/dataset/<int:dataset_id>/synthesize', methods=['POST'])
+@jwt_required
+def generate_synthetic(dataset_id):
+    """Generate synthetic data based on the dataset."""
+    dataset = Dataset.query.get_or_404(dataset_id)
+    if dataset.user_id != g.current_user.id:
+        return jsonify({'error': 'Access denied'}), 403
+        
+    try:
+        df = pd.read_csv(dataset.cleaned_path)
+        
+        # Generator
+        from data_pipeline.synthetic_generator import SyntheticGenerator
+        gen = SyntheticGenerator(df)
+        gen.fit()
+        
+        # Get count from request or default to len(df)
+        data = request.get_json() or {}
+        n_rows = int(data.get('n_rows', len(df)))
+        
+        synthetic_df = gen.generate(n_rows=n_rows)
+        
+        # Save
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'synthetic_{dataset.id}_{timestamp}.csv'
+        user_folder = get_user_folder(g.current_user.id)
+        path = os.path.join(user_folder, filename)
+        synthetic_df.to_csv(path, index=False)
+        
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            'preview': synthetic_df.head(5).replace({np.nan: None}).to_dict('records')
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/download/<filename>')
+@jwt_required
+def download_file(filename):
+    """Generic download for user files (synthetic, row changes, etc)."""
+    user_folder = get_user_folder(g.current_user.id)
+    return send_from_directory(user_folder, filename, as_attachment=True)
+
+
 @app.route('/download_changes/<filename>')
 @jwt_required
 def download_changes(filename):
-    """Download the row-level changes CSV."""
-    user_folder = get_user_folder(g.current_user.id)
-    return send_from_directory(user_folder, filename, as_attachment=True)
+    """Legacy route for row-level changes (aliased to download_file)."""
+    return download_file(filename)
+
+
+
+@app.route('/dataset/<int:dataset_id>/evolve', methods=['POST'])
+@jwt_required
+def evolve_features(dataset_id):
+    """Automatically evolve features using interaction terms."""
+    dataset = Dataset.query.get_or_404(dataset_id)
+    if dataset.user_id != g.current_user.id:
+        return jsonify({'error': 'Access denied'}), 403
+        
+    try:
+        # Load cleaned data (pre-encoding)
+        df = pd.read_csv(dataset.cleaned_path)
+        
+        # Initialize Feature Engineer
+        from data_pipeline.feature_engineer import FeatureEngineer
+        engineer = FeatureEngineer(
+            df, 
+            target_col=dataset.target_column, 
+            problem_type=dataset.problem_type
+        )
+        
+        # Standard steps + Evolve
+        engineer.create_datetime_features()
+        engineer.encode_categorical()
+        engineer.auto_evolve(max_new_features=5)
+        # engineer.scale_features() # Maybe skip scaling here to keep it readable? 
+        # But 'final' usually implies scaled. Let's scale.
+        engineer.scale_features()
+        
+        # Save new final data
+        final_df = engineer.get_transformed_data()
+        final_df.to_csv(dataset.final_path, index=False)
+        
+        # Update metadata
+        dataset.final_rows = final_df.shape[0]
+        dataset.final_cols = final_df.shape[1]
+        
+        # Update log
+        try:
+            log = json.loads(dataset.processing_log)
+        except:
+            log = {}
+            
+        log['feature_engineering'] = engineer.get_summary()['transformations']
+        dataset.processing_log = json.dumps(log)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'features_count': final_df.shape[1],
+            'transformations': log['feature_engineering']
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/dataset/<int:dataset_id>/drift', methods=['POST'])
+@jwt_required
+def check_drift(dataset_id):
+    """Check for data drift against a baseline."""
+    current_ds = Dataset.query.get_or_404(dataset_id)
+    if current_ds.user_id != g.current_user.id:
+        return jsonify({'error': 'Access denied'}), 403
+        
+    data = request.get_json()
+    baseline_id = data.get('baseline_id')
+    
+    if not baseline_id:
+        return jsonify({'error': 'Baseline dataset ID required'}), 400
+        
+    baseline_ds = Dataset.query.get(baseline_id)
+    if not baseline_ds or baseline_ds.user_id != g.current_user.id:
+        return jsonify({'error': 'Invalid baseline dataset'}), 400
+        
+    try:
+        # Load both datasets (cleaned for fair comparison)
+        cur_df = pd.read_csv(current_ds.cleaned_path)
+        base_df = pd.read_csv(baseline_ds.cleaned_path)
+        
+        from data_pipeline.drift_detector import DriftDetector
+        # Note: DriftDetector(baseline, current)
+        detector = DriftDetector(base_df, cur_df)
+        detector.run()
+        
+        return jsonify({
+            'success': True,
+            'report': detector.report
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':

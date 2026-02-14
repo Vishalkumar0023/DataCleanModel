@@ -670,7 +670,9 @@
         <div class="tab-bar">
             <button class="tab active" onclick="showTab('cleaned')">🧹 Cleaned</button>
             <button class="tab" onclick="showTab('final')">⚡ Model-Ready</button>
+            <button class="tab" id="evolve-tab-btn" onclick="showTab('evolve')">🚀 Boost Features</button>
             <button class="tab" onclick="showTab('ops')">📋 Log</button>
+            <button class="tab" id="synth-tab-btn" onclick="showTab('synth')">🧬 Synthetic Data</button>
             <button class="tab" id="ml-tab" onclick="showTab('ml')" style="display:none;">🧠 ML Results</button>
         </div>
 
@@ -740,6 +742,45 @@
             </div>
         </div>
 
+        <!-- Feature Evolution Tab -->
+        <div id="tab-evolve" class="tab-content">
+            <div class="glass-card">
+                <div class="card-header">
+                    <h2>🚀 Automated Feature Evolution</h2>
+                    <span class="badge" style="background:rgba(255, 215, 0, 0.2);color:#ffd700;">AI Powered</span>
+                </div>
+                <div class="card-body">
+                    <p style="margin-bottom:1.5rem;color:var(--text-secondary);">
+                        Let AI discover hidden relationships in your data by creating "Super Features" (interactions,
+                        polynomials) that improve model accuracy.
+                    </p>
+
+                    <div
+                        style="text-align:center;padding:2rem;background:rgba(255,255,255,0.03);border-radius:16px;margin-bottom:1.5rem;">
+                        <button class="btn btn-primary" id="evolve-btn" onclick="evolveFeatures()"
+                            style="font-size:1.1rem;padding:0.8rem 2rem;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);border:none;color:white;cursor:pointer;">
+                            ⚡ Run Feature Evolution
+                        </button>
+                        <p style="margin-top:1rem;font-size:0.85rem;color:var(--text-tertiary);">
+                            Scans for non-linear relationships · Auto-selects top interactions · Updates Model-Ready
+                            data
+                        </p>
+                    </div>
+
+                    <div id="evolve-result"
+                        style="display:none;border-top:1px solid var(--separator);padding-top:1.5rem;">
+                        <h3 style="font-size:1.1rem;margin-bottom:1rem;">✨ New Super Features Discovered</h3>
+                        <div id="evolve-list" class="tags" style="display:block;"></div>
+                        <div class="alert"
+                            style="margin-top:1.5rem;background:rgba(52,199,89,0.15);color:#34c759;padding:1rem;border-radius:12px;font-size:0.9rem;">
+                            ✅ Model-Ready dataset has been updated with these new features. You can now retrain your
+                            models!
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Operations Tab -->
         <div id="tab-ops" class="tab-content">
             <div class="glass-card">
@@ -768,6 +809,45 @@
                         <li class="muted">No feature engineering recorded</li>
                         {% endfor %}
                     </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Synthetic Data Tab -->
+        <div id="tab-synth" class="tab-content">
+            <div class="glass-card">
+                <div class="card-header">
+                    <h2>🧬 Synthetic Data Generator</h2>
+                    <span class="badge" style="background:rgba(255, 59, 48, 0.2);color:#ff453a;">Privacy Safe</span>
+                </div>
+                <div class="card-body">
+                    <p style="margin-bottom:1.5rem;color:var(--text-secondary);">
+                        Create a statistically identical clone of this dataset. Useful for testing, sharing, or
+                        increasing data volume without exposing real user information.
+                    </p>
+
+                    <div style="display:flex;gap:1rem;align-items:flex-end;margin-bottom:1.5rem;">
+                        <div style="flex:1;">
+                            <label style="display:block;margin-bottom:0.5rem;font-size:0.9rem;">Number of Rows to
+                                Generate</label>
+                            <input type="number" id="synth-rows" value="{{ dataset.cleaned_rows }}"
+                                style="width:100%;padding:0.6rem;background:rgba(255,255,255,0.05);border:1px solid var(--glass-border);border-radius:8px;color:var(--text-primary);">
+                        </div>
+                        <button class="btn btn-success" id="synth-btn" onclick="generateSyntheticData()"
+                            style="height:42px;background:var(--success);border-color:var(--success);">
+                            🚀 Generate Data
+                        </button>
+                    </div>
+
+                    <div id="synth-result"
+                        style="display:none;margin-top:2rem;border-top:1px solid var(--separator);padding-top:1.5rem;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                            <h3 style="font-size:1.1rem;">✅ Generation Complete</h3>
+                            <a href="#" id="synth-download" class="btn"
+                                style="border-color:var(--success);color:var(--success);">⬇️ Download CSV</a>
+                        </div>
+                        <div id="synth-preview"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1112,6 +1192,36 @@
 
                 ${warnHTML ? '<div class="glass-card"><div class="card-body">' + warnHTML + '</div></div>' : ''}
 
+                <!-- XAI Dashboard -->
+                ${(() => {
+                    const xai = r.explanation || {};
+                    if (xai.available) {
+                        return `
+                        <div class="glass-card" style="margin-bottom:1rem;">
+                            <div class="card-header">
+                                <h2>🔮 Explainable AI (SHAP)</h2>
+                                <span class="badge" style="background:rgba(100,200,255,0.1);color:#64c8ff;font-size:0.7rem;">Transparency Engine</span>
+                            </div>
+                            <div class="card-body">
+                                <p style="color:var(--text-secondary);font-size:0.9rem;text-align:center;margin-bottom:1.5rem;">
+                                    These plots show <b>why</b> the model makes specific predictions, revealing the impact of each feature.
+                                </p>
+                                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap:1.5rem;">
+                                    <div style="background:rgba(255,255,255,0.03);padding:1rem;border-radius:12px;">
+                                        <h4 style="text-align:center;margin-bottom:1rem;font-size:0.95rem;color:var(--text-primary);">Feature Impact Magnitude</h4>
+                                        <img src="${xai.summary_bar}" style="width:100%;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+                                    </div>
+                                    <div style="background:rgba(255,255,255,0.03);padding:1rem;border-radius:12px;">
+                                        <h4 style="text-align:center;margin-bottom:1rem;font-size:0.95rem;color:var(--text-primary);">Feature Value Distribution</h4>
+                                        <img src="${xai.summary_dot}" style="width:100%;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`;
+                    }
+                    return '';
+                })()}
+
                 <!-- Metrics Table -->
                 <div class="glass-card" style="margin-bottom:1rem;">
                     <div class="card-header"><h2>📈 Model Comparison</h2></div>
@@ -1132,6 +1242,164 @@
                 </div>
             `;
             container.style.display = 'block';
+        }
+
+        /* ── Synthetic Data ── */
+        async function generateSyntheticData() {
+            const btn = document.getElementById('synth-btn');
+            const input = document.getElementById('synth-rows');
+            const rows = input.value;
+
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Generating...';
+            document.getElementById('synth-result').style.display = 'none';
+
+            try {
+                const res = await fetch('/dataset/{{ dataset.id }}/synthesize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ n_rows: rows })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    btn.innerHTML = '✅ Generated';
+                    setTimeout(() => { btn.innerHTML = '🚀 Generate Data'; btn.disabled = false; }, 3000);
+
+                    document.getElementById('synth-result').style.display = 'block';
+                    document.getElementById('synth-download').href = `/download/${data.filename}`;
+
+                    // Render preview
+                    const previewDiv = document.getElementById('synth-preview');
+                    if (data.preview && data.preview.length > 0) {
+                        const cols = Object.keys(data.preview[0]);
+                        let html = '<table><thead><tr>' + cols.map(c => `<th>${c}</th>`).join('') + '</tr></thead><tbody>';
+                        data.preview.forEach(row => {
+                            html += '<tr>' + cols.map(c => `<td>${row[c] !== null ? row[c] : ''}</td>`).join('') + '</tr>';
+                        });
+                        html += '</tbody></table>';
+                        previewDiv.innerHTML = '<div class="table-wrap scroll-container">' + html + '</div>';
+                    }
+                } else {
+                    btn.innerHTML = '⚠️ Error';
+                    btn.disabled = false;
+                    alert(data.error);
+                }
+            } catch (e) {
+                btn.innerHTML = '⚠️ Error';
+                btn.disabled = false;
+                alert(e.message);
+            }
+        }
+
+        /* ── Feature Evolution ── */
+        async function evolveFeatures() {
+            const btn = document.getElementById('evolve-btn');
+            btn.disabled = true;
+            btn.innerHTML = '⚡ Scanning Relationships...';
+            document.getElementById('evolve-result').style.display = 'none';
+
+            try {
+                const res = await fetch('/dataset/{{ dataset.id }}/evolve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    btn.innerHTML = '✅ Evolution Complete';
+                    document.getElementById('evolve-result').style.display = 'block';
+
+                    const list = document.getElementById('evolve-list');
+                    if (data.transformations && data.transformations.length > 0) {
+                        const evolvedMsg = data.transformations.filter(t => t.includes('Auto-evolved'));
+                        if (evolvedMsg.length > 0) {
+                            list.innerHTML = `<div style="padding:1rem;background:rgba(255,255,255,0.05);border-radius:8px;color:var(--text-primary);">${evolvedMsg[evolvedMsg.length - 1]}</div>`;
+                        } else {
+                            list.innerHTML = '<div style="color:var(--text-secondary);">No significant new features found.</div>';
+                        }
+                    }
+
+                    setTimeout(() => { btn.innerHTML = '⚡ Run Feature Evolution'; btn.disabled = false; }, 4000);
+
+                } else {
+                    btn.innerHTML = '⚠️ Error';
+                    btn.disabled = false;
+                    alert(data.error);
+                }
+            } catch (e) {
+                btn.innerHTML = '⚠️ Error';
+                btn.disabled = false;
+                alert(e.message);
+            }
+        }
+
+        /* ── Data Drift ── */
+        async function checkDrift() {
+            const baselineId = document.getElementById('drift-baseline').value;
+            if (!baselineId) {
+                alert('Please select a baseline dataset');
+                return;
+            }
+
+            const btn = document.getElementById('drift-btn');
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Analyzing...';
+            document.getElementById('drift-result').style.display = 'none';
+
+            try {
+                const res = await fetch('/dataset/{{ dataset.id }}/drift', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ baseline_id: baselineId })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    btn.innerHTML = '🔍 Check Drift';
+                    btn.disabled = false;
+
+                    const report = data.report;
+                    const resultDiv = document.getElementById('drift-result');
+                    resultDiv.style.display = 'block';
+
+                    let driftHtml = `
+                        <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;">
+                            <div style="font-size:2rem;font-weight:bold;color:${report.score > 80 ? '#34c759' : '#ff453a'}">${report.score}/100</div>
+                            <div>
+                                <div style="font-weight:bold;">Health Score</div>
+                                <div style="font-size:0.85rem;color:var(--text-secondary);">${report.score > 80 ? 'Healthy' : 'Drift Detected'}</div>
+                            </div>
+                        </div>
+                    `;
+
+                    // Schema Drift
+                    if (report.schema_drift.has_drift) {
+                        driftHtml += `<div class="alert" style="margin-bottom:1rem;background:rgba(255,59,48,0.1);color:#ff453a;">⚠️ Schema mismatch detected!</div>`;
+                    }
+
+                    // Statistical Drift
+                    if (report.drifted_features && report.drifted_features.length > 0) {
+                        driftHtml += `<h4 style="margin-bottom:0.5rem;">Drifted Features (KS-Test p<0.05)</h4>
+                        <div class="tags">
+                            ${report.drifted_features.map(f => `<span class="tag" style="background:rgba(255,59,48,0.2);color:#ff453a;">${f}</span>`).join('')}
+                        </div>`;
+                    } else {
+                        driftHtml += `<div class="alert" style="background:rgba(52,199,89,0.1);color:#34c759;">✅ No statistical drift detected.</div>`;
+                    }
+
+                    resultDiv.innerHTML = driftHtml;
+
+                } else {
+                    btn.disabled = false;
+                    btn.innerHTML = '🔍 Check Drift';
+                    alert(data.error);
+                }
+            } catch (e) {
+                btn.disabled = false;
+                btn.innerHTML = '🔍 Check Drift';
+                alert(e.message);
+            }
         }
 
         /* ── Delete Functionality ── */

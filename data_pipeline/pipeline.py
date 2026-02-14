@@ -200,7 +200,8 @@ class DataPipeline:
         drop_high_correlation: bool = True,
         correlation_threshold: float = 0.95,
         handle_imbalance: bool = False,
-        imbalance_method: str = 'smote'
+        imbalance_method: str = 'smote',
+        auto_evolve_features: bool = False
     ) -> 'DataPipeline':
         """
         Perform feature engineering.
@@ -233,6 +234,9 @@ class DataPipeline:
         
         if create_polynomial_features:
             self.engineer.create_polynomial_features(degree=polynomial_degree)
+
+        if auto_evolve_features:
+            self.engineer.auto_evolve()
         
         if drop_low_variance:
             self.engineer.drop_low_variance_features()
