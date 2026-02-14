@@ -16,7 +16,10 @@ from typing import Optional, Dict, Any, List, Tuple
 from sklearn.model_selection import (
     cross_validate, StratifiedKFold, KFold, RandomizedSearchCV
 )
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.pipeline import Pipeline, make_pipeline
+from sklearn.compose import ColumnTransformer, make_column_transformer
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler, LabelEncoder, OrdinalEncoder
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
@@ -745,7 +748,145 @@ class ModelTrainer:
         self.log.append(f"Model exported to '{path}'")
         return path
 
-    # ─── 12. Full Pipeline Run ─────────────────────────────────────────
+    # ─── 13. Comparison Logic ──────────────────────────────────────────
+    def train_naive_baseline(self) -> Dict[str, Any]:
+        """
+        Train a 'Naive' model on raw data for comparison.
+        Strategy: 'Just Encoding' + Minimal Imputation (to prevent crash).
+        """
+        try:
+            # work on a copy of original_df
+            df = self.original_df.copy()
+            
+            # 1. Drop IDs (essential) but keep almost everything else
+            for col in df.columns:
+                if col == self.target_col: continue
+                if ID_PATTERNS.match(col) or URL_PATTERNS.search(col):
+                    df.drop(columns=[col], inplace=True)
+            
+            # 2. Handle Target
+            if self.target_col not in df.columns:
+                return {} 
+            
+            y = df[self.target_col]
+            X = df.drop(columns=[self.target_col])
+            
+            # 3. Naive Preprocessing (The "Lazy" Way - using Pipeline to avoid leakage)
+            
+            # Identify columns
+            num_cols = X.select_dtypes(include=[np.number]).columns
+            cat_cols = X.select_dtypes(exclude=[np.number]).columns
+            
+            # Preprocessing for numeric data: simple mean imputation
+            num_transformer = SimpleImputer(strategy='mean')
+            
+            # Preprocessing for categorical data: constant fill + ordinal encoding
+            # OrdinalEncoder is used because it handles 2D arrays (unlike LabelEncoder)
+            # and we can handle unknown values by encoding them as -1
+            cat_transformer = make_pipeline(
+                SimpleImputer(strategy='constant', fill_value='missing'),
+                OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+            )
+            
+            preprocessor = make_column_transformer(
+                (num_transformer, num_cols),
+                (cat_transformer, cat_cols),
+                remainder='passthrough'
+            )
+            
+            # Encode target if necessary
+            if self.problem_type == 'classification' and y.dtype == 'object':
+                le = LabelEncoder()
+                y = le.fit_transform(y.astype(str))
+            
+            # 4. Train Naive Model (Simple Decision Tree)
+            if self.problem_type == 'classification':
+                from sklearn.tree import DecisionTreeClassifier
+                model = DecisionTreeClassifier(random_state=42)
+                scoring = 'accuracy'
+            else:
+                from sklearn.tree import DecisionTreeRegressor
+                model = DecisionTreeRegressor(random_state=42)
+                scoring = 'r2'
+                
+            # Create full pipeline
+            # Note: We don't scale or do anything fancy. Just impute -> encode -> tree.
+            pipeline = make_pipeline(preprocessor, model)
+            
+            # Quick CV
+            n_folds = 3
+            if self.problem_type == 'classification':
+                cv = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
+            else:
+                cv = KFold(n_splits=n_folds, shuffle=True, random_state=42)
+                
+            try:
+                cv_scores = cross_validate(pipeline, X, y, cv=cv, scoring=scoring)
+                mean_score = np.mean(cv_scores['test_score'])
+            except ValueError as ve:
+                # Fallback for very small datasets where cv=3 might fail
+                if "n_splits" in str(ve):
+                    model.fit(preprocessor.fit_transform(X, y), y)
+                    mean_score = model.score(preprocessor.transform(X), y)
+                else:
+                    raise ve
+            
+            return {
+                "score": round(mean_score, 4),
+                "metric": scoring,
+                "model_type": "Decision Tree (Baseline)"
+            }
+            
+        except Exception as e:
+            self.log.append(f"Naive baseline failed: {e}")
+            return {"score": 0.0, "error": str(e)}
+
+    def run_full_comparison(self) -> Dict[str, Any]:
+        """
+        Run both Naive (Raw) and Advanced (Cleaned) pipelines and compare.
+        """
+        # 1. Train Naive
+        naive_results = self.train_naive_baseline()
+        
+        # 2. Run Advanced Pipeline
+        advanced_dashboard = self.run()
+        
+        # 3. Compare
+        advanced_score = 0
+        if 'best_model' in advanced_dashboard and 'metrics' in advanced_dashboard['best_model']:
+            metrics = advanced_dashboard['best_model']['metrics']
+            # classification -> Accuracy or F1
+            # regression -> R2
+            if self.problem_type == 'classification':
+                # Try accuracy first for direct comparison
+                if 'accuracy' in metrics:
+                    advanced_score = metrics['accuracy']['mean']
+                elif 'f1_weighted' in metrics:
+                    advanced_score = metrics['f1_weighted']['mean']
+            else:
+                if 'r2' in metrics:
+                    advanced_score = metrics['r2']['mean']
+        
+        naive_score = naive_results.get('score', 0)
+        
+        # Calculate Improvement
+        improvement = 0
+        if naive_score != 0:
+            improvement = ((advanced_score - naive_score) / abs(naive_score)) * 100
+        elif advanced_score > 0:
+            improvement = 100 # Infinite improvement
+            
+        # Add comparison to dashboard
+        advanced_dashboard['comparison'] = {
+            'raw_score': naive_score,
+            'cleaned_score': advanced_score,
+            'improvement_pct': round(improvement, 1),
+            'metric': naive_results.get('metric', 'score')
+        }
+        
+        return advanced_dashboard
+
+    # ─── 14. Full Pipeline Run ─────────────────────────────────────────
     def run(self) -> Dict[str, Any]:
         """
         Run the full ML training pipeline:

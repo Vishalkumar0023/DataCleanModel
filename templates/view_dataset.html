@@ -772,31 +772,121 @@
             </div>
         </div>
 
-        <!-- ML Results Tab -->
-        <div id="tab-ml" class="tab-content">
-            <div id="ml-loading" style="display:none;text-align:center;padding:3rem;">
-                <div style="font-size:3rem;animation:spin 1s linear infinite;display:inline-block;">⚙️</div>
-                <p style="margin-top:1rem;color:var(--text-secondary);">Training models... This may take a minute.</p>
-                <style>
-                    @keyframes spin {
-                        from {
-                            transform: rotate(0deg)
-                        }
-
-                        to {
-                            transform: rotate(360deg)
-                        }
-                    }
-                </style>
+        <!-- AI Suggestions -->
+        <div class="glass-card">
+            <div class="card-header">
+                <h2>💡 AI Cleaning Suggestions</h2>
             </div>
-            <div id="ml-results" style="display:none;"></div>
-            <div id="ml-error" style="display:none;" class="glass-card">
-                <div class="card-body" style="text-align:center;padding:2rem;">
-                    <div style="font-size:2rem;">❌</div>
-                    <p id="ml-error-msg" style="margin-top:0.5rem;color:#ff6b6b;"></p>
-                </div>
+            <div class="card-body">
+                <ul class="ops-list">
+                    {% for s in processing_log.get('suggestions', []) %}
+                    <li>
+                        <div style="width:100%">
+                            <div style="display:flex;justify-content:space-between;margin-bottom:0.2rem;">
+                                <strong>{{ s.column }}</strong>
+                                <span style="color:var(--accent);font-size:0.75rem;">{{ s.action }}</span>
+                            </div>
+                            <div style="font-size:0.8rem;color:var(--text-secondary);">
+                                Found: {{ s.issue }} · <em>{{ s.reason }}</em>
+                            </div>
+                        </div>
+                    </li>
+                    {% else %}
+                    <li class="muted">No suggestions generated</li>
+                    {% endfor %}
+                </ul>
             </div>
         </div>
+    </div>
+
+    <!-- Row-Level Transformations (New) -->
+    <div class="glass-card" style="margin-top:1.5rem;">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+            <h2>🔎 Row-Level Transformations</h2>
+            {% if row_changes_csv %}
+            <a href="{{ url_for('download_changes', filename=row_changes_csv) }}" class="btn btn-sm btn-outline"
+                style="gap:0.5rem;">
+                <i class="fas fa-download"></i> Download CSV
+            </a>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% set changes = processing_log.get('row_changes', []) %}
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                <span class="badge" style="background:var(--accent); color:white;">{{ changes|length }} Changes
+                    Captured</span>
+                <span style="font-size:0.8rem; color:var(--text-tertiary);">Showing all transformations</span>
+            </div>
+
+            <div class="custom-scrollbar" style="max-height: 400px; overflow-y: auto; padding-right: 0.5rem;">
+                <ul class="ops-list">
+                    {% for c in changes %}
+                    <li>
+                        <div style="width:100%; display:flex; align-items:center; justify-content:space-between;">
+                            <div style="display:flex; align-items:center; gap:0.8rem;">
+                                <div
+                                    style="background:rgba(255,255,255,0.1); padding:0.2rem 0.5rem; border-radius:4px; font-size:0.7rem; color:var(--text-tertiary); min-width: 60px; text-align:center;">
+                                    Row {{ c.index }}
+                                </div>
+                                <div>
+                                    <div style="font-weight:600; font-size:0.9rem;">{{ c.column }}</div>
+                                    <div style="font-size:0.75rem; color:var(--text-secondary);">
+                                        Reason: {{ c.reason }}
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div
+                                    style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; justify-content: flex-end;">
+                                    <span
+                                        style="color:#ff6b6b; text-decoration:line-through; opacity:0.8; max-width: 150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+                                        title="{{ c.old_value }}">{{ c.old_value }}</span>
+                                    <span style="color:var(--text-tertiary);">→</span>
+                                    <span
+                                        style="color:var(--success); font-weight:600; max-width: 150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+                                        title="{{ c.new_value }}">{{ c.new_value }}</span>
+                                </div>
+                                <div style="font-size:0.7rem; color:var(--accent); margin-top:2px;">
+                                    {{ c.operation }}
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+                    {% else %}
+                    <li class="muted">No specific row transformations captured</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    </div>
+    </div>
+
+    <!-- ML Results Tab -->
+    <div id="tab-ml" class="tab-content">
+        <div id="ml-loading" style="display:none;text-align:center;padding:3rem;">
+            <div style="font-size:3rem;animation:spin 1s linear infinite;display:inline-block;">⚙️</div>
+            <p style="margin-top:1rem;color:var(--text-secondary);">Training models... This may take a minute.</p>
+            <style>
+                @keyframes spin {
+                    from {
+                        transform: rotate(0deg)
+                    }
+
+                    to {
+                        transform: rotate(360deg)
+                    }
+                }
+            </style>
+        </div>
+        <div id="ml-results" style="display:none;"></div>
+        <div id="ml-error" style="display:none;" class="glass-card">
+            <div class="card-body" style="text-align:center;padding:2rem;">
+                <div style="font-size:2rem;">❌</div>
+                <p id="ml-error-msg" style="margin-top:0.5rem;color:#ff6b6b;"></p>
+            </div>
+        </div>
+    </div>
     </div>
 
     <script>
@@ -916,7 +1006,86 @@
             // Warnings
             let warnHTML = warns.length ? warns.map(w => `<div style="padding:0.5rem 0.75rem;background:rgba(255,149,0,0.1);border-radius:8px;margin-bottom:0.5rem;font-size:0.85rem;">⚠️ ${w}</div>`).join('') : '';
 
+            // Comparison Dashboard ("Killer Visual")
+            let comparisonHTML = '';
+            if (r.comparison && r.comparison.raw_score !== undefined) {
+                const imp = r.comparison.improvement_pct;
+                const metric = r.comparison.metric.toUpperCase();
+
+                comparisonHTML = `
+                 <div class="glass-card" style="margin-bottom:1.5rem; border:1px solid rgba(52, 199, 89, 0.3);">
+                    <div class="card-header" style="justify-content:center; border-bottom:1px solid rgba(255,255,255,0.1);">
+                        <h2 style="font-size:1.1rem;">🚀 PRE-PROCESSING IMPACT</h2>
+                    </div>
+                    <div class="card-body">
+                        <div style="display:flex; align-items:center; justify-content:space-around; text-align:center; padding:1rem 0;">
+                            <!-- Raw -->
+                            <div style="opacity:0.7;">
+                                <div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; margin-bottom:0.5rem;">Baseline (Encoded Only)</div>
+                                <div style="font-size:1.8rem; font-weight:700;">${(r.comparison.raw_score * 100).toFixed(1)}%</div>
+                                <div style="font-size:0.7rem;">${metric}</div>
+                            </div>
+                            
+                            <!-- Arrow & Improvement -->
+                            <div style="display:flex; flex-direction:column; align-items:center;">
+                                <div style="font-size:2.5rem; color:var(--success); font-weight:800; text-shadow:0 0 20px rgba(52,199,89,0.4);">
+                                    +${imp.toFixed(1)}%
+                                </div>
+                                <div style="background:rgba(52,199,89,0.2); color:#6ee7b7; padding:0.2rem 0.6rem; border-radius:12px; font-size:0.75rem; font-weight:600;">
+                                    ACCURACY BOOST
+                                </div>
+                            </div>
+                            
+                            <!-- Cleaned -->
+                            <div>
+                                <div style="font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; margin-bottom:0.5rem; color:var(--accent);">Cleaned Data</div>
+                                <div style="font-size:1.8rem; font-weight:700; color:var(--text-primary); text-shadow:0 0 15px rgba(0,122,255,0.4);">
+                                    ${(r.comparison.cleaned_score * 100).toFixed(1)}%
+                                </div>
+                                <div style="font-size:0.7rem;">${metric}</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Pipeline Visualization -->
+                        <div style="margin-top:1rem; border-top:1px solid var(--separator); padding-top:1rem;">
+                            <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:0.8rem; text-align:center;">How It Works</div>
+                            
+                            <div style="display:flex; flex-direction:column; gap:0.5rem; opacity:0.9;">
+                                <!-- Path 1: Raw -->
+                                <div style="display:flex; align-items:center; gap:0.5rem; font-size:0.75rem;">
+                                    <span style="width:60px; color:var(--text-secondary);">Baseline:</span>
+                                    <div style="flex:1; display:flex; align-items:center; background:rgba(255,255,255,0.05); padding:0.4rem; border-radius:6px; gap:0.4rem;">
+                                        <span style="background:rgba(255,255,255,0.1); padding:2px 6px; border-radius:4px;">📄 Raw CSV</span>
+                                        <span style="color:var(--text-tertiary);">→</span>
+                                        <span style="background:rgba(255,59,48,0.15); color:#ff453a; padding:2px 6px; border-radius:4px; border:1px solid rgba(255,59,48,0.2);">🏷️ Just Encoding</span>
+                                        <span style="color:var(--text-tertiary);">→</span>
+                                        <span>📉 Baseline Model</span>
+                                    </div>
+                                </div>
+                                
+                                <!-- Path 2: Cleaned -->
+                                <div style="display:flex; align-items:center; gap:0.5rem; font-size:0.75rem;">
+                                    <span style="width:60px; color:var(--accent); font-weight:600;">Ours:</span>
+                                    <div style="flex:1; display:flex; align-items:center; background:rgba(0,122,255,0.1); border:1px solid rgba(0,122,255,0.2); padding:0.4rem; border-radius:6px; gap:0.4rem;">
+                                        <span style="background:rgba(255,255,255,0.1); padding:2px 6px; border-radius:4px;">📄 Raw CSV</span>
+                                        <span style="color:var(--accent);">→</span>
+                                        <span style="background:rgba(52,199,89,0.15); color:#34c759; padding:2px 6px; border-radius:4px;">✨ Auto-Clean</span>
+                                        <span style="color:var(--accent);">→</span>
+                                        <span style="background:rgba(52,199,89,0.15); color:#34c759; padding:2px 6px; border-radius:4px;">🧩 Impute & Scale</span>
+                                        <span style="color:var(--accent);">→</span>
+                                        <span style="font-weight:600;">🚀 Advanced Training</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                 </div>
+                 `;
+            }
+
             container.innerHTML = `
+                ${comparisonHTML}
+
                 <!-- Best Model + Reliability -->
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
                     <div class="glass-card">

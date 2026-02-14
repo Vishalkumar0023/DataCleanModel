@@ -11,7 +11,7 @@ import base64
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
-from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, g, make_response
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, g, make_response, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -512,8 +512,16 @@ def process_data():
         validation = pipeline.validate()
         
         # Clean
+        # Calculate Initial Quality & Suggestions
+        raw_cleaner = DataCleaner(pipeline.raw_df)
+        initial_quality = raw_cleaner.validate_quality()
+        suggestions = raw_cleaner.generate_suggestions()
+        
         pipeline.clean()
         cleaning_summary = pipeline.cleaner.get_cleaning_summary()
+        
+        # Calculate Final Quality
+        final_quality = pipeline.cleaner.validate_quality()
         
         # Feature engineering
         if target_col and target_col in pipeline.cleaned_df.columns:
@@ -550,13 +558,30 @@ def process_data():
             problem_type=problem_type,
             processing_log=json.dumps({
                 'cleaning': cleaning_summary['operations'],
-                'feature_engineering': feature_summary.get('transformations', [])
+                'feature_engineering': feature_summary.get('transformations', []),
+                'quality_impact': {
+                    'before': initial_quality,
+                    'after': final_quality
+                },
+                'suggestions': suggestions,
+                'row_changes': cleaning_summary.get('row_changes', [])
             }),
             user_id=g.current_user.id
         )
         db.session.add(dataset)
         db.session.commit()
         
+        # Save row changes to CSV for download
+        row_changes_df = pd.DataFrame(cleaning_summary.get('row_changes', []))
+        row_changes_filename = f"row_changes_{dataset.id}.csv"
+        row_changes_path = os.path.join(user_folder, row_changes_filename)
+        
+        if not row_changes_df.empty:
+            row_changes_df.to_csv(row_changes_path, index=False)
+        else:
+            # Create empty CSV with headers if no changes
+            pd.DataFrame(columns=['index', 'column', 'old_value', 'new_value', 'operation', 'reason']).to_csv(row_changes_path, index=False)
+
         # Generate plots
         plots = generate_plots(pipeline.cleaned_df, target_col)
         
@@ -566,6 +591,7 @@ def process_data():
         return jsonify({
             'success': True,
             'dataset_id': dataset.id,
+            'row_changes_csv': row_changes_filename,
             'validation': {
                 'original_shape': validation['shape'],
                 'missing_count': validation['missing_values']['total_missing_cells'],
@@ -573,12 +599,18 @@ def process_data():
             },
             'cleaning': {
                 'final_shape': list(pipeline.cleaned_df.shape),
-                'operations': cleaning_summary['operations']
+                'operations': cleaning_summary['operations'],
+                'row_changes': cleaning_summary.get('row_changes', [])
             },
             'feature_engineering': {
                 'final_shape': list(pipeline.final_df.shape),
                 'transformations': feature_summary.get('transformations', [])
             },
+            'quality_impact': {
+                'before': initial_quality,
+                'after': final_quality
+            },
+            'suggestions': suggestions,
             'plots': plots
         })
     
@@ -877,7 +909,8 @@ def train_model(dataset_id):
         model_path = os.path.join(user_folder, model_filename)
         
         trainer = ModelTrainer(df, target_col=target_col, problem_type=problem_type)
-        results = trainer.run()
+        # Use new comparison method
+        results = trainer.run_full_comparison() 
         trainer.export_model(model_path)
         
         # Save results to database
@@ -1173,6 +1206,14 @@ def predict_user_model():
 # ==============================================================================
 # RUN APP
 # ==============================================================================
+
+@app.route('/download_changes/<filename>')
+@jwt_required
+def download_changes(filename):
+    """Download the row-level changes CSV."""
+    user_folder = get_user_folder(g.current_user.id)
+    return send_from_directory(user_folder, filename, as_attachment=True)
+
 
 if __name__ == '__main__':
     print("=" * 60)

@@ -29,6 +29,7 @@ class DataCleaner:
         self.original_shape = df.shape
         self.cleaning_log: List[str] = []
         self.transformations: List[Dict[str, Any]] = []
+        self.row_changes: List[Dict[str, Any]] = []
     
     def remove_duplicates(
         self, 
@@ -46,6 +47,22 @@ class DataCleaner:
             Which duplicate to keep ('first', 'last', False)
         """
         before = len(self.df)
+        
+        # Identify duplicates for logging before removing
+        dupes = self.df[self.df.duplicated(subset=subset, keep=keep)]
+        if not dupes.empty:
+            for idx in dupes.index[:2]:
+                # Create a string representation of the row (first 3 cols)
+                row_str = ", ".join([str(x) for x in self.df.loc[idx].values[:3]]) + "..."
+                self.row_changes.append({
+                    "index": int(idx),
+                    "column": "Row",
+                    "old_value": row_str,
+                    "new_value": "Deleted",
+                    "operation": "Row Removed",
+                    "reason": "Duplicate"
+                })
+
         self.df = self.df.drop_duplicates(subset=subset, keep=keep)
         removed = before - len(self.df)
         
@@ -114,27 +131,72 @@ class DataCleaner:
         numeric_cols = self.df.select_dtypes(include=[np.number]).columns
         for col in numeric_cols:
             if self.df[col].isnull().any():
+                # Log usage
+                missing_indices = self.df[self.df[col].isnull()].index.tolist()
+                
+                # Determine strategy name and value
+                strat_name = "Imputed (Custom)"
+                val_used = fill_value
+                
                 if fill_value is not None:
                     self.df[col] = self.df[col].fillna(fill_value)
+                    strat_name = f"Filled {fill_value}"
                 elif numeric_strategy == 'mean':
-                    self.df[col] = self.df[col].fillna(self.df[col].mean())
+                    val_used = self.df[col].mean()
+                    self.df[col] = self.df[col].fillna(val_used)
+                    strat_name = "Imputed Mean"
                 elif numeric_strategy == 'median':
-                    self.df[col] = self.df[col].fillna(self.df[col].median())
+                    val_used = self.df[col].median()
+                    self.df[col] = self.df[col].fillna(val_used)
+                    strat_name = "Imputed Median"
                 elif numeric_strategy == 'zero':
+                    val_used = 0
                     self.df[col] = self.df[col].fillna(0)
+                    strat_name = "Filled Zero"
+
+                # Capture 2 examples
+                for idx in missing_indices[:2]:
+                    self.row_changes.append({
+                        "index": int(idx),
+                        "column": col,
+                        "old_value": "NaN",
+                        "new_value": round(float(val_used), 4) if isinstance(val_used, (float, int)) else str(val_used),
+                        "operation": strat_name,
+                        "reason": "Missing Value"
+                    })
         
         # Fill categorical columns
         categorical_cols = self.df.select_dtypes(include=['object', 'category']).columns
         for col in categorical_cols:
             if self.df[col].isnull().any():
+                missing_indices = self.df[self.df[col].isnull()].index.tolist()
+                strat_name = "Imputed (Custom)"
+                val_used = fill_value
+                
                 if fill_value is not None:
                     self.df[col] = self.df[col].fillna(fill_value)
+                    strat_name = f"Filled {fill_value}"
                 elif categorical_strategy == 'mode':
                     mode_val = self.df[col].mode()
                     if len(mode_val) > 0:
-                        self.df[col] = self.df[col].fillna(mode_val[0])
+                        val_used = mode_val[0]
+                        self.df[col] = self.df[col].fillna(val_used)
+                        strat_name = "Imputed Mode"
                 elif categorical_strategy == 'unknown':
+                    val_used = "Unknown"
                     self.df[col] = self.df[col].fillna('Unknown')
+                    strat_name = "Filled 'Unknown'"
+                
+                # Capture 2 examples
+                for idx in missing_indices[:2]:
+                    self.row_changes.append({
+                        "index": int(idx),
+                        "column": col,
+                        "old_value": "NaN",
+                        "new_value": str(val_used),
+                        "operation": strat_name,
+                        "reason": "Missing Value"
+                    })
         
         missing_after = self.df.isnull().sum().sum()
         msg = f"Handled missing values: {missing_before:,} → {missing_after:,}"
@@ -265,6 +327,34 @@ class DataCleaner:
             outlier_count = outlier_mask.sum()
             
             if outlier_count > 0:
+                # Capture examples BEFORE modifying
+                outlier_indices = self.df[outlier_mask].index.tolist()
+                for idx in outlier_indices[:2]:
+                    # Get the actual value
+                    old_val = self.df.loc[idx, col]
+                    new_val_str = "NaN"
+                    action_desc = "Removed"
+                    
+                    if action == 'clip':
+                        if old_val < lower_bound:
+                            new_val = lower_bound
+                        else:
+                            new_val = upper_bound
+                        new_val_str = f"{new_val:.4f}"
+                        action_desc = "Clipped w/ IQR"
+                    elif action == 'nan':
+                        new_val_str = "NaN"
+                        action_desc = "Set to NaN"
+                    
+                    self.row_changes.append({
+                        "index": int(idx),
+                        "column": col,
+                        "old_value": f"{old_val:.4f}",
+                        "new_value": new_val_str,
+                        "operation": action_desc,
+                        "reason": "Outlier"
+                    })
+
                 if action == 'clip':
                     self.df[col] = self.df[col].clip(lower_bound, upper_bound)
                 elif action == 'remove':
@@ -317,8 +407,10 @@ class DataCleaner:
             if col not in self.df.columns:
                 continue
             
+            # Original series for comparison
+            original_series = self.df[col].copy()
             original_unique = self.df[col].nunique()
-            
+
             if self.df[col].dtype == 'category':
                 self.df[col] = self.df[col].astype(str)
             
@@ -332,6 +424,21 @@ class DataCleaner:
             if replace_mapping and col in replace_mapping:
                 self.df[col] = self.df[col].replace(replace_mapping[col])
             
+            # Detect and log row-level changes
+            # We only care about non-null values that actually changed
+            changed_mask = (original_series != self.df[col]) & original_series.notna()
+            if changed_mask.any():
+                changed_indices = self.df[changed_mask].index[:1000]
+                for idx in changed_indices:
+                     self.row_changes.append({
+                        "index": int(idx),
+                        "column": col,
+                        "old_value": str(original_series.loc[idx]),
+                        "new_value": str(self.df.loc[idx, col]),
+                        "operation": "Text Normalized",
+                        "reason": "Categorical Standardized"
+                     })
+
             new_unique = self.df[col].nunique()
             if new_unique < original_unique:
                 changes.append(f"{col}: {original_unique} → {new_unique} unique values")
@@ -525,6 +632,8 @@ class DataCleaner:
                     except:
                         return np.nan
 
+            if handle_shorthand:
+                # Use the defined internal function
                 self.df[col] = series.apply(parse_shorthand)
             else:
                 self.df[col] = pd.to_numeric(series, errors='coerce')
@@ -532,7 +641,41 @@ class DataCleaner:
             new_nans = self.df[col].isna().sum()
             valid_converted = len(self.df) - new_nans
             
+            # Log examples of successful conversions
             if valid_converted > 0:
+                # Find indices where it wasn't null before but is now a valid number
+                # AND the string representation looks different (e.g., "$100" vs 100.0)
+                # or just log any valid conversion to show off
+                valid_mask = self.df[col].notna() & (self.df[col].astype(str) != series)
+                if valid_mask.any():
+                    # Capture all changes (limit to 1000 safety)
+                    sample_indices = self.df[valid_mask].index[:1000]
+                    for idx in sample_indices:
+                        val_old = self.df.loc[idx, col] # This is already the NEW value in self.df
+                        # We need the OLD value from 'series' variable (which was copies)
+                        # Wait, 'series' was `self.df[col].astype(str).str.strip()` ... 
+                        # but we also did regex replacement on it if remove_symbols=True
+                        # So let's grab the raw original from a temp var if we can, or just use the 'series' which is "cleaned string"
+                        
+                        # Actually, let's just grab the original raw value from a backup if needed,
+                        # but 'series' is close enough to show "cleaned string" vs "final number".
+                        # Better yet: usage `self.df.loc[idx, col]` is the NEW value.
+                        # The OLD value is in `series[idx]` (if index aligns, which it should).
+                        # BUT series was modified by remove_symbols.
+                        
+                        # Let's just say:
+                        old_val_str = series.loc[idx] 
+                        new_val = self.df.loc[idx, col]
+                        
+                        self.row_changes.append({
+                            "index": int(idx),
+                            "column": col,
+                            "old_value": str(old_val_str),
+                            "new_value": str(new_val),
+                            "operation": "Text Cleaned",
+                            "reason": "Numeric Text"
+                        })
+
                 changes.append(f"{col}: Converted to numeric ({valid_converted} valid)")
         
         if changes:
@@ -577,7 +720,7 @@ class DataCleaner:
         pattern: str,
         new_col_name: str
     ) -> 'DataCleaner':
-        """
+        r"""
         Extract text using regex capture group.
         
         Parameters:
@@ -669,24 +812,54 @@ class DataCleaner:
             "rows_changed": self.original_shape[0] - self.df.shape[0],
             "columns_changed": self.original_shape[1] - self.df.shape[1],
             "operations": self.cleaning_log,
-            "transformations": self.transformations
+            "transformations": self.transformations,
+            "row_changes": self.row_changes
         }
     
     def validate_quality(self) -> Dict[str, Any]:
         """
-        Perform data quality checks.
+        Perform data quality checks and calculate a 0-100 Quality Score.
         
         Returns:
         --------
         dict
-            Report containing quality metrics and warnings.
+            Report containing quality metrics, score, and warnings.
         """
+        n_rows = len(self.df)
+        n_cols = len(self.df.columns)
+        
+        if n_rows == 0 or n_cols == 0:
+            return {"score": 0, "grade": "F", "warnings": ["Empty dataset"]}
+
+        # 1. Completeness (0-40 pts)
+        missing_total = self.df.isnull().sum().sum()
+        missing_pct = missing_total / (n_rows * n_cols)
+        completeness_score = max(0, 40 * (1 - missing_pct * 2))  # Penalize missing heavily
+
+        # 2. Uniqueness (0-30 pts)
+        # Check duplicates
+        n_dupes = self.df.duplicated().sum()
+        dupe_pct = n_dupes / n_rows
+        uniqueness_score = max(0, 30 * (1 - dupe_pct * 2))
+
+        # 3. Consistency/Validity (0-30 pts)
+        # Check for constant columns (0 variance)
+        n_constant = sum([1 for c in self.df.columns if self.df[c].nunique() <= 1])
+        const_pct = n_constant / n_cols
+        consistency_score = max(0, 30 * (1 - const_pct * 3))
+
+        final_score = int(completeness_score + uniqueness_score + consistency_score)
+        
+        grade = 'A' if final_score >= 90 else 'B' if final_score >= 80 else 'C' if final_score >= 60 else 'D' if final_score >= 40 else 'F'
+
         report: Dict[str, Any] = {
-            "rows": len(self.df),
-            "columns": len(self.df.columns),
-            "missing_values": int(self.df.isnull().sum().sum()),
-            "missing_percentage": float((self.df.isnull().sum().sum() / self.df.size) * 100 if self.df.size > 0 else 0),
-            "duplicate_rows": int(self.df.duplicated().sum()),
+            "score": final_score,
+            "grade": grade,
+            "rows": n_rows,
+            "columns": n_cols,
+            "missing_values": int(missing_total),
+            "missing_percentage": round(float(missing_pct * 100), 1),
+            "duplicate_rows": int(n_dupes),
             "constant_columns": [],
             "warnings": []
         }
@@ -703,6 +876,84 @@ class DataCleaner:
             report["warnings"].append(f"{len(high_missing)} columns have >50% missing values")
             
         return report
+
+    def generate_suggestions(self) -> List[Dict[str, str]]:
+        """
+        Generate AI-like cleaning suggestions based on data issues.
+        """
+        suggestions = []
+        
+        # Missing Values
+        missing = self.df.isnull().sum()
+        missing_cols = missing[missing > 0]
+        
+        for col, count in missing_cols.items():
+            pct = count / len(self.df)
+            if pct > 0.4:
+                suggestions.append({
+                    "column": col,
+                    "issue": f"{pct:.0%} missing values",
+                    "action": "Drop Column",
+                    "reason": "Too much missing data to impute reliably."
+                })
+            else:
+                dtype = self.df[col].dtype
+                method = "Median Imputation" if np.issubdtype(dtype, np.number) else "Mode Imputation"
+                suggestions.append({
+                    "column": col,
+                    "issue": f"{pct:.0%} missing values",
+                    "action": method,
+                    "reason": "Standard strategy for filling gaps."
+                })
+
+        # Duplicates
+        n_dupes = self.df.duplicated().sum()
+        if n_dupes > 0:
+            suggestions.append({
+                "column": "Dataset",
+                "issue": f"{n_dupes} duplicate rows",
+                "action": "Remove Duplicates",
+                "reason": "Duplicate data skews model training."
+            })
+            
+        # Outliers (Numeric)
+        numeric_cols = self.df.select_dtypes(include=[np.number]).columns
+        for col in numeric_cols:
+            if self.df[col].nunique() < 10: continue # Skip categorical-like
+            
+            Q1 = self.df[col].quantile(0.25)
+            Q3 = self.df[col].quantile(0.75)
+            IQR = Q3 - Q1
+            lower = Q1 - 1.5 * IQR
+            upper = Q3 + 1.5 * IQR
+            outliers = ((self.df[col] < lower) | (self.df[col] > upper)).sum()
+            
+            if outliers > 0:
+                pct = outliers / len(self.df)
+                if pct < 0.05:
+                    action = "Clip (Winsorize)" 
+                else:
+                    action = "Log Transform" if (self.df[col] > 0).all() else "Standard Scaling"
+                    
+                suggestions.append({
+                    "column": col,
+                    "issue": f"{outliers} outliers detected",
+                    "action": action,
+                    "reason": "Outliers can distort linear models."
+                })
+
+        # ID Columns
+        for col in self.df.columns:
+            if col.lower() in ['id', 'uuid', 'guid', 'index'] or \
+               (self.df[col].nunique() == len(self.df) and self.df[col].dtype == 'object'):
+                suggestions.append({
+                    "column": col,
+                    "issue": "High cardinality / ID-like",
+                    "action": "Drop Column",
+                    "reason": "Identifiers do not predict the target."
+                })
+
+        return suggestions
 
     def print_summary(self) -> None:
         """Print cleaning summary."""
