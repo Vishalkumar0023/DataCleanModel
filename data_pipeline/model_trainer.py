@@ -485,7 +485,7 @@ class ModelTrainer:
                 self.log.append(f"SMOTE failed, using original data: {e}")
 
         # CV strategy
-        n_folds = 5
+        n_folds = 3
         if self.problem_type == 'classification':
             cv = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
             scoring_primary = 'f1_weighted'
@@ -501,7 +501,7 @@ class ModelTrainer:
             scoring = ['r2', 'neg_mean_absolute_error', 'neg_root_mean_squared_error']
 
         # Limit search iterations for speed
-        n_iter = min(20, max(5, 500 // len(model_defs)))
+        n_iter = min(10, max(3, 100 // len(model_defs)))
 
         for name, config in model_defs.items():
             self.log.append(f"Training {name}...")
@@ -514,7 +514,7 @@ class ModelTrainer:
                     cv=cv,
                     scoring=scoring_primary,
                     random_state=42,
-                    n_jobs=-1,
+                    n_jobs=1,
                     error_score='raise'
                 )
                 search.fit(X_train, y_train)
@@ -523,7 +523,7 @@ class ModelTrainer:
                 # Cross-validate with all metrics
                 cv_scores = cross_validate(
                     best_estimator, X_train, y_train,
-                    cv=cv, scoring=scoring, n_jobs=-1
+                    cv=cv, scoring=scoring, n_jobs=1
                 )
 
                 # Store results
