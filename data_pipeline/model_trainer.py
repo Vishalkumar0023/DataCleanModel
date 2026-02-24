@@ -2,7 +2,8 @@
 Model Trainer Module
 ====================
 Advanced ML training with auto-detection, multi-model comparison,
-cross-validation, hyperparameter tuning, explainability, and model export.
+cross-validation, hyperparameter tuning, and model export.
+Memory-optimized for 512MB hosting (no SHAP, reduced models).
 """
 
 import pandas as pd
@@ -10,6 +11,7 @@ import numpy as np
 import time
 import joblib
 import re
+import gc
 import warnings
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Tuple
@@ -23,18 +25,13 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler, LabelEncoder, OrdinalEncoder
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score, roc_auc_score,
     r2_score, mean_absolute_error, mean_squared_error,
     classification_report, make_scorer
 )
 
-try:
-    from xgboost import XGBClassifier, XGBRegressor
-    HAS_XGBOOST = True
-except Exception:
-    HAS_XGBOOST = False
+HAS_XGBOOST = False  # Disabled for memory optimization
 
 try:
     from imblearn.over_sampling import SMOTE
@@ -389,84 +386,39 @@ class ModelTrainer:
                         class_weight='balanced' if use_balanced else None
                     ),
                     'params': {
-                        'C': [0.01, 0.1, 1, 10],
-                        'solver': ['lbfgs', 'liblinear']
+                        'C': [0.1, 1, 10],
+                        'solver': ['lbfgs']
                     }
                 },
                 'Random Forest': {
                     'model': RandomForestClassifier(
-                        random_state=42,
+                        random_state=42, n_jobs=1,
                         class_weight='balanced' if use_balanced else None
                     ),
                     'params': {
-                        'n_estimators': [100, 200, 300],
-                        'max_depth': [5, 10, 20, None],
-                        'min_samples_split': [2, 5, 10],
-                        'min_samples_leaf': [1, 2, 4]
-                    }
-                },
-                'Gradient Boosting': {
-                    'model': GradientBoostingClassifier(random_state=42),
-                    'params': {
-                        'n_estimators': [100, 200],
-                        'max_depth': [3, 5, 7],
-                        'learning_rate': [0.01, 0.05, 0.1, 0.2],
-                        'subsample': [0.8, 1.0]
+                        'n_estimators': [50, 100],
+                        'max_depth': [5, 10],
+                        'min_samples_split': [2, 5]
                     }
                 }
             }
-            if HAS_XGBOOST:
-                models['XGBoost'] = {
-                    'model': XGBClassifier(
-                        random_state=42, eval_metric='logloss',
-                        use_label_encoder=False
-                    ),
-                    'params': {
-                        'n_estimators': [100, 200, 300],
-                        'max_depth': [3, 5, 7],
-                        'learning_rate': [0.01, 0.05, 0.1],
-                        'subsample': [0.8, 1.0],
-                        'colsample_bytree': [0.8, 1.0]
-                    }
-                }
         else:  # regression
             models = {
                 'Ridge Regression': {
                     'model': Ridge(random_state=42),
                     'params': {
-                        'alpha': [0.01, 0.1, 1, 10, 100]
+                        'alpha': [0.1, 1, 10]
                     }
                 },
                 'Random Forest': {
-                    'model': RandomForestRegressor(random_state=42),
+                    'model': RandomForestRegressor(random_state=42, n_jobs=1),
                     'params': {
-                        'n_estimators': [100, 200, 300],
-                        'max_depth': [5, 10, 20, None],
-                        'min_samples_split': [2, 5, 10],
-                        'min_samples_leaf': [1, 2, 4]
-                    }
-                },
-                'Gradient Boosting': {
-                    'model': GradientBoostingRegressor(random_state=42),
-                    'params': {
-                        'n_estimators': [100, 200],
-                        'max_depth': [3, 5, 7],
-                        'learning_rate': [0.01, 0.05, 0.1, 0.2],
-                        'subsample': [0.8, 1.0]
+                        'n_estimators': [50, 100],
+                        'max_depth': [5, 10],
+                        'min_samples_split': [2, 5]
                     }
                 }
             }
-            if HAS_XGBOOST:
-                models['XGBoost'] = {
-                    'model': XGBRegressor(random_state=42),
-                    'params': {
-                        'n_estimators': [100, 200, 300],
-                        'max_depth': [3, 5, 7],
-                        'learning_rate': [0.01, 0.05, 0.1],
-                        'subsample': [0.8, 1.0],
-                        'colsample_bytree': [0.8, 1.0]
-                    }
-                }
 
         return models
 
@@ -559,6 +511,8 @@ class ModelTrainer:
             except Exception as e:
                 self.log.append(f"  {name} failed: {str(e)[:100]}")
                 self.cv_results[name] = {'error': str(e)}
+            finally:
+                gc.collect()
 
         return self.cv_results
 
@@ -661,73 +615,10 @@ class ModelTrainer:
 
         return dashboard
 
-    # ─── 15. Explainability (SHAP) ─────────────────────────────────────
+    # ─── 15. Explainability (disabled for memory) ─────────────────────
     def explain_model(self) -> Dict[str, Any]:
-        """Generate SHAP explanations for the best model."""
-        if self.best_model is None or self.X is None:
-            return {}
-
-        try:
-            import shap
-            import matplotlib.pyplot as plt
-            import io
-            import base64
-            
-            # Use a small sample for speed
-            sample_size = min(100, len(self.X))
-            X_sample = self.X[:sample_size]
-            
-            # Choose explainer
-            # Tree models vs Linear vs Generic
-            model_type = type(self.best_model).__name__
-            if 'Forest' in model_type or 'Boost' in model_type or 'Tree' in model_type or 'XGB' in model_type:
-                explainer = shap.TreeExplainer(self.best_model)
-            elif 'Linear' in model_type or 'Ridge' in model_type or 'Logistic' in model_type:
-                explainer = shap.LinearExplainer(self.best_model, X_sample)
-            else:
-                explainer = shap.KernelExplainer(self.best_model.predict, X_sample)
-
-            shap_values = explainer.shap_values(X_sample)
-            
-            # Handling classification (list of arrays) vs regression (array)
-            if isinstance(shap_values, list):
-                # binary classification -> take index 1 (positive class)
-                # multi-class -> take index 1 just for demo
-                shap_vals = shap_values[1] if len(shap_values) > 1 else shap_values[0]
-            else:
-                shap_vals = shap_values
-
-            # PLOT 1: Summary Plot (Bar)
-            fig, ax = plt.subplots(figsize=(10, 6))
-            shap.summary_plot(shap_vals, X_sample, feature_names=self.feature_names, plot_type="bar", show=False)
-            summary_bar = self._fig_to_base64(fig)
-            plt.close(fig)
-
-            # PLOT 2: Summary Plot (Dot/Beeswarm)
-            fig, ax = plt.subplots(figsize=(10, 6))
-            shap.summary_plot(shap_vals, X_sample, feature_names=self.feature_names, show=False)
-            summary_dot = self._fig_to_base64(fig)
-            plt.close(fig)
-            
-            return {
-                'summary_bar': summary_bar,
-                'summary_dot': summary_dot,
-                'available': True
-            }
-
-        except Exception as e:
-            self.log.append(f"SHAP explanation failed: {e}")
-            return {'error': str(e), 'available': False}
-
-    def _fig_to_base64(self, fig) -> str:
-        """Convert matplotlib figure to base64 string."""
-        import io
-        import base64
-        buffer = io.BytesIO()
-        fig.savefig(buffer, format='png', dpi=100, bbox_inches='tight')
-        buffer.seek(0)
-        img_str = base64.b64encode(buffer.getvalue()).decode()
-        return f"data:image/png;base64,{img_str}"
+        """SHAP disabled for memory optimization on 512MB hosting."""
+        return {'available': False, 'error': 'Disabled for memory optimization'}
 
     # ─── 14. Full Pipeline Run ─────────────────────────────────────────
     def run(self) -> Dict[str, Any]:
@@ -742,8 +633,9 @@ class ModelTrainer:
         """
         self.prepare_features()
         self.train_all_models()
-        self.get_best_model() # Ensure best model is selected
+        self.get_best_model()
         dashboard = self.get_metrics_dashboard()
+        gc.collect()
         return dashboard
 
     # ─── 10. Reliability Score ─────────────────────────────────────────

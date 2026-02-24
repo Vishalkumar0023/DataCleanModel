@@ -2,15 +2,18 @@
 Exploratory Data Analysis (EDA) Module
 ======================================
 Performs comprehensive EDA with visualizations and insights.
+Memory-optimized: uses only matplotlib (no seaborn/scipy).
 """
 
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import seaborn as sns
 from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
 import warnings
+import gc
 
 warnings.filterwarnings('ignore')
 
@@ -19,24 +22,10 @@ class EDAAnalyzer:
     """Perform exploratory data analysis on datasets."""
     
     def __init__(self, df: pd.DataFrame, target_col: Optional[str] = None):
-        """
-        Initialize EDA analyzer.
-        
-        Parameters:
-        -----------
-        df : pd.DataFrame
-            Input DataFrame
-        target_col : str, optional
-            Target variable column name
-        """
         self.df = df.copy()
         self.target_col = target_col
         self.insights: List[str] = []
         self.stats: Dict[str, Any] = {}
-        
-        # Set plotting style
-        plt.style.use('seaborn-v0_8-whitegrid')
-        sns.set_palette("husl")
     
     def summary_statistics(self) -> pd.DataFrame:
         """Generate comprehensive summary statistics."""
@@ -53,7 +42,6 @@ class EDAAnalyzer:
         
         self.stats['numeric_summary'] = stats
         
-        # Identify skewed features
         skewed = stats[stats['skewness'].abs() > 1].index.tolist()
         if skewed:
             self.insights.append(f"Highly skewed features detected: {skewed}")
@@ -75,28 +63,14 @@ class EDAAnalyzer:
             })
             summaries[col] = summary
             
-            # Check for high cardinality
             if len(value_counts) > 50:
                 self.insights.append(f"High cardinality in '{col}': {len(value_counts)} unique values")
         
         self.stats['categorical_summary'] = summaries
         return summaries
     
-    def correlation_analysis(
-        self,
-        method: str = 'pearson',
-        threshold: float = 0.7
-    ) -> pd.DataFrame:
-        """
-        Compute correlation matrix and identify highly correlated features.
-        
-        Parameters:
-        -----------
-        method : str
-            'pearson', 'spearman', or 'kendall'
-        threshold : float
-            Threshold for high correlation
-        """
+    def correlation_analysis(self, method: str = 'pearson', threshold: float = 0.7) -> pd.DataFrame:
+        """Compute correlation matrix and identify highly correlated features."""
         numeric_df = self.df.select_dtypes(include=[np.number])
         
         if len(numeric_df.columns) < 2:
@@ -105,7 +79,6 @@ class EDAAnalyzer:
         corr_matrix = numeric_df.corr(method=method)
         self.stats['correlation_matrix'] = corr_matrix
         
-        # Find highly correlated pairs
         high_corr_pairs = []
         for i in range(len(corr_matrix.columns)):
             for j in range(i + 1, len(corr_matrix.columns)):
@@ -129,7 +102,6 @@ class EDAAnalyzer:
         
         for col in numeric_cols:
             series = self.df[col].dropna()
-            
             distributions[col] = {
                 'mean': series.mean(),
                 'median': series.median(),
@@ -154,7 +126,6 @@ class EDAAnalyzer:
         analysis = {'column': self.target_col}
         
         if target.dtype in [np.number, 'int64', 'float64']:
-            # Regression target
             analysis['type'] = 'continuous'
             analysis['stats'] = {
                 'mean': target.mean(),
@@ -164,7 +135,6 @@ class EDAAnalyzer:
                 'max': target.max()
             }
         else:
-            # Classification target
             analysis['type'] = 'categorical'
             value_counts = target.value_counts()
             analysis['class_distribution'] = value_counts.to_dict()
@@ -176,29 +146,12 @@ class EDAAnalyzer:
         self.stats['target_analysis'] = analysis
         return analysis
     
-    def plot_distributions(
-        self,
-        columns: Optional[List[str]] = None,
-        figsize: Tuple[int, int] = (15, 10),
-        save_path: Optional[str] = None
-    ) -> None:
-        """
-        Plot distribution histograms for numeric columns.
-        
-        Parameters:
-        -----------
-        columns : list, optional
-            Specific columns to plot
-        figsize : tuple
-            Figure size
-        save_path : str, optional
-            Path to save the figure
-        """
+    def plot_distributions(self, columns=None, figsize=(15, 10), save_path=None):
+        """Plot distribution histograms for numeric columns."""
         if columns is None:
             columns = self.df.select_dtypes(include=[np.number]).columns.tolist()
         
         if len(columns) == 0:
-            print("No numeric columns to plot")
             return
         
         n_cols = min(3, len(columns))
@@ -210,15 +163,12 @@ class EDAAnalyzer:
         for idx, col in enumerate(columns):
             ax = axes[idx]
             data = self.df[col].dropna()
-            
-            ax.hist(data, bins=30, edgecolor='black', alpha=0.7)
+            ax.hist(data, bins=30, edgecolor='black', alpha=0.7, color='#4C72B0')
             ax.axvline(data.mean(), color='red', linestyle='--', label=f'Mean: {data.mean():.2f}')
             ax.axvline(data.median(), color='green', linestyle='--', label=f'Median: {data.median():.2f}')
             ax.set_title(f'{col}\n(skew: {data.skew():.2f})')
             ax.legend(fontsize=8)
-            ax.set_xlabel('')
         
-        # Hide unused subplots
         for idx in range(len(columns), len(axes)):
             axes[idx].set_visible(False)
         
@@ -226,22 +176,17 @@ class EDAAnalyzer:
         plt.tight_layout()
         
         if save_path:
-            plt.savefig(save_path, dpi=150, bbox_inches='tight')
+            plt.savefig(save_path, dpi=100, bbox_inches='tight')
         
-        plt.show()
+        plt.close(fig)
+        gc.collect()
     
-    def plot_boxplots(
-        self,
-        columns: Optional[List[str]] = None,
-        figsize: Tuple[int, int] = (15, 10),
-        save_path: Optional[str] = None
-    ) -> None:
+    def plot_boxplots(self, columns=None, figsize=(15, 10), save_path=None):
         """Plot boxplots for numeric columns to visualize outliers."""
         if columns is None:
             columns = self.df.select_dtypes(include=[np.number]).columns.tolist()
         
         if len(columns) == 0:
-            print("No numeric columns to plot")
             return
         
         n_cols = min(4, len(columns))
@@ -253,7 +198,6 @@ class EDAAnalyzer:
         for idx, col in enumerate(columns):
             ax = axes[idx]
             data = self.df[col].dropna()
-            
             bp = ax.boxplot(data, patch_artist=True)
             bp['boxes'][0].set_facecolor('lightblue')
             ax.set_title(col)
@@ -266,68 +210,64 @@ class EDAAnalyzer:
         plt.tight_layout()
         
         if save_path:
-            plt.savefig(save_path, dpi=150, bbox_inches='tight')
+            plt.savefig(save_path, dpi=100, bbox_inches='tight')
         
-        plt.show()
+        plt.close(fig)
+        gc.collect()
     
-    def plot_correlation_heatmap(
-        self,
-        figsize: Tuple[int, int] = (12, 10),
-        save_path: Optional[str] = None
-    ) -> None:
-        """Plot correlation heatmap."""
+    def plot_correlation_heatmap(self, figsize=(12, 10), save_path=None):
+        """Plot correlation heatmap using pure matplotlib (no seaborn)."""
         if 'correlation_matrix' not in self.stats:
             self.correlation_analysis()
         
         corr_matrix = self.stats.get('correlation_matrix')
         
         if corr_matrix is None or corr_matrix.empty:
-            print("Not enough numeric columns for correlation matrix")
             return
         
         fig, ax = plt.subplots(figsize=figsize)
         
+        # Pure matplotlib heatmap
         mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
+        masked_corr = np.ma.masked_where(mask, corr_matrix.values)
         
-        sns.heatmap(
-            corr_matrix,
-            mask=mask,
-            annot=True if len(corr_matrix.columns) <= 15 else False,
-            fmt='.2f',
-            cmap='RdBu_r',
-            center=0,
-            square=True,
-            linewidths=0.5,
-            ax=ax
-        )
+        cax = ax.imshow(masked_corr, cmap='RdBu_r', vmin=-1, vmax=1, aspect='auto')
+        fig.colorbar(cax, ax=ax, shrink=0.8)
+        
+        # Labels
+        ax.set_xticks(range(len(corr_matrix.columns)))
+        ax.set_yticks(range(len(corr_matrix.columns)))
+        ax.set_xticklabels(corr_matrix.columns, rotation=45, ha='right', fontsize=8)
+        ax.set_yticklabels(corr_matrix.columns, fontsize=8)
+        
+        # Annotate if small enough
+        if len(corr_matrix.columns) <= 15:
+            for i in range(len(corr_matrix.columns)):
+                for j in range(len(corr_matrix.columns)):
+                    if not mask[i, j]:
+                        ax.text(j, i, f'{corr_matrix.iloc[i, j]:.2f}',
+                                ha='center', va='center', fontsize=7)
         
         plt.title('Feature Correlation Heatmap', fontsize=14, fontweight='bold')
         plt.tight_layout()
         
         if save_path:
-            plt.savefig(save_path, dpi=150, bbox_inches='tight')
+            plt.savefig(save_path, dpi=100, bbox_inches='tight')
         
-        plt.show()
+        plt.close(fig)
+        gc.collect()
     
-    def plot_categorical(
-        self,
-        columns: Optional[List[str]] = None,
-        figsize: Tuple[int, int] = (15, 10),
-        save_path: Optional[str] = None
-    ) -> None:
+    def plot_categorical(self, columns=None, figsize=(15, 10), save_path=None):
         """Plot count plots for categorical columns."""
         if columns is None:
             columns = self.df.select_dtypes(include=['object', 'category']).columns.tolist()
         
         if len(columns) == 0:
-            print("No categorical columns to plot")
             return
         
-        # Filter to low cardinality columns for visualization
         columns = [c for c in columns if self.df[c].nunique() <= 20]
         
         if len(columns) == 0:
-            print("All categorical columns have too many unique values to plot")
             return
         
         n_cols = min(2, len(columns))
@@ -339,8 +279,7 @@ class EDAAnalyzer:
         for idx, col in enumerate(columns):
             ax = axes[idx]
             value_counts = self.df[col].value_counts()
-            
-            bars = ax.bar(range(len(value_counts)), value_counts.values)
+            ax.bar(range(len(value_counts)), value_counts.values, color='#4C72B0')
             ax.set_xticks(range(len(value_counts)))
             ax.set_xticklabels(value_counts.index, rotation=45, ha='right')
             ax.set_title(f'{col} ({len(value_counts)} categories)')
@@ -353,25 +292,20 @@ class EDAAnalyzer:
         plt.tight_layout()
         
         if save_path:
-            plt.savefig(save_path, dpi=150, bbox_inches='tight')
+            plt.savefig(save_path, dpi=100, bbox_inches='tight')
         
-        plt.show()
+        plt.close(fig)
+        gc.collect()
     
-    def plot_target_relationships(
-        self,
-        figsize: Tuple[int, int] = (15, 10),
-        save_path: Optional[str] = None
-    ) -> None:
+    def plot_target_relationships(self, figsize=(15, 10), save_path=None):
         """Plot relationships between features and target."""
         if self.target_col is None:
-            print("No target column specified")
             return
         
         numeric_cols = [c for c in self.df.select_dtypes(include=[np.number]).columns 
                        if c != self.target_col][:6]
         
         if len(numeric_cols) == 0:
-            print("No numeric features to plot")
             return
         
         n_cols = min(3, len(numeric_cols))
@@ -382,7 +316,7 @@ class EDAAnalyzer:
         
         for idx, col in enumerate(numeric_cols):
             ax = axes[idx]
-            ax.scatter(self.df[col], self.df[self.target_col], alpha=0.5, s=10)
+            ax.scatter(self.df[col], self.df[self.target_col], alpha=0.5, s=10, color='#4C72B0')
             ax.set_xlabel(col)
             ax.set_ylabel(self.target_col)
             ax.set_title(f'{col} vs {self.target_col}')
@@ -394,55 +328,34 @@ class EDAAnalyzer:
         plt.tight_layout()
         
         if save_path:
-            plt.savefig(save_path, dpi=150, bbox_inches='tight')
+            plt.savefig(save_path, dpi=100, bbox_inches='tight')
         
-        plt.show()
+        plt.close(fig)
+        gc.collect()
     
-    def run_full_analysis(
-        self,
-        show_plots: bool = True,
-        save_plots: bool = False,
-        output_dir: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """
-        Run complete EDA pipeline.
-        
-        Parameters:
-        -----------
-        show_plots : bool
-            Whether to display plots
-        save_plots : bool
-            Whether to save plots to files
-        output_dir : str, optional
-            Directory to save plots
-        """
+    def run_full_analysis(self, show_plots=True, save_plots=False, output_dir=None):
+        """Run complete EDA pipeline."""
         print("=" * 60)
         print("EXPLORATORY DATA ANALYSIS")
         print("=" * 60)
         
-        # Summary statistics
         print("\n📊 Summary Statistics:")
         stats = self.summary_statistics()
         if not stats.empty:
             print(stats.round(2).to_string())
         
-        # Categorical summary
         print("\n📋 Categorical Columns:")
         cat_summary = self.categorical_summary()
         for col, summary in cat_summary.items():
             print(f"\n{col}:")
             print(summary.head(5).to_string())
-            if len(summary) > 5:
-                print(f"   ... and {len(summary) - 5} more values")
         
-        # Correlation analysis
         print("\n🔗 Correlation Analysis:")
         corr = self.correlation_analysis()
         if 'high_correlations' in self.stats:
             for pair in self.stats['high_correlations'][:10]:
                 print(f"   {pair['feature_1']} ↔ {pair['feature_2']}: {pair['correlation']}")
         
-        # Target analysis
         if self.target_col:
             print(f"\n🎯 Target Variable Analysis ({self.target_col}):")
             target_analysis = self.target_analysis()
@@ -454,13 +367,11 @@ class EDAAnalyzer:
                     for cls, count in target_analysis['class_distribution'].items():
                         print(f"   {cls}: {count}")
         
-        # Insights
         if self.insights:
             print("\n💡 Key Insights:")
             for insight in self.insights:
                 print(f"   ⚠️  {insight}")
         
-        # Plots
         if show_plots:
             save_path = lambda name: f"{output_dir}/{name}.png" if save_plots and output_dir else None
             
@@ -474,6 +385,8 @@ class EDAAnalyzer:
                 self.plot_target_relationships(save_path=save_path('target_relationships'))
         
         print("\n" + "=" * 60)
+        
+        gc.collect()
         
         return {
             'stats': self.stats,

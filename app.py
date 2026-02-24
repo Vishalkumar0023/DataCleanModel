@@ -7,6 +7,7 @@ Flask web app with JWT token-based authentication and per-user dataset storage.
 import os
 import json
 import io
+import gc
 import base64
 from datetime import datetime, timedelta, timezone
 from functools import wraps
@@ -18,14 +19,16 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import jwt as pyjwt
 
 # Heavy libraries are imported lazily to save memory on 512MB hosting
-# Split into 3 groups so each route only loads what it needs
+# Split into groups so each route only loads what it needs
 pd = None
 np = None
 plt = None
-sns = None
 DataPipeline = None
 ModelTrainer = None
 DataCleaner = None
+
+# Max rows to prevent OOM on large datasets
+MAX_ROWS = 50000
 
 def _load_data_libs():
     """Load only pandas + numpy (for upload/download routes)."""
@@ -38,17 +41,14 @@ def _load_data_libs():
         np = numpy
 
 def _load_plot_libs():
-    """Load matplotlib + seaborn (only for plot generation)."""
-    global plt, sns
+    """Load matplotlib only (no seaborn — saves ~170MB)."""
+    global plt
     _load_data_libs()
     if plt is None:
         import matplotlib
         matplotlib.use('Agg')
         import matplotlib.pyplot
         plt = matplotlib.pyplot
-    if sns is None:
-        import seaborn
-        sns = seaborn
 
 def _load_pipeline_libs():
     """Load data_pipeline (scikit-learn based - for processing/training)."""
@@ -60,18 +60,12 @@ def _load_pipeline_libs():
         ModelTrainer = _MT
         DataCleaner = _DC
 
-def _load_ml_libs():
-    """Load everything (backward compat)."""
-    _load_data_libs()
-    _load_plot_libs()
-    _load_pipeline_libs()
-
 # Initialize Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///pipeline_users.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['MAX_CONTENT_LENGTH'] = 1 * 1024 * 1024 * 1024  # 1GB
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 5MB max upload
 
 # ── JWT Configuration ──
 JWT_SECRET_KEY = app.config['SECRET_KEY']
@@ -276,8 +270,13 @@ def generate_plots(df, target_col=None):
             fig, ax = plt.subplots(figsize=(10, 8))
             corr = df[numeric_cols].corr()
             mask = np.triu(np.ones_like(corr, dtype=bool))
-            sns.heatmap(corr, mask=mask, annot=len(numeric_cols) <= 10, fmt='.2f',
-                       cmap='RdBu_r', center=0, ax=ax)
+            masked_corr = np.ma.masked_where(mask, corr.values)
+            cax = ax.imshow(masked_corr, cmap='RdBu_r', vmin=-1, vmax=1, aspect='auto')
+            fig.colorbar(cax, ax=ax, shrink=0.8)
+            ax.set_xticks(range(len(corr.columns)))
+            ax.set_yticks(range(len(corr.columns)))
+            ax.set_xticklabels(corr.columns, rotation=45, ha='right', fontsize=8)
+            ax.set_yticklabels(corr.columns, fontsize=8)
             ax.set_title('Feature Correlation Heatmap')
             plt.tight_layout()
             plots['correlation'] = fig_to_base64(fig)

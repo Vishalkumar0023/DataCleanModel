@@ -8,8 +8,6 @@ gunicorn
 pandas
 numpy
 scikit-learn
-scipy
 matplotlib
-seaborn
 joblib
 openpyxl
