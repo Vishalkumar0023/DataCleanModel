@@ -18,7 +18,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import jwt as pyjwt
 
 # Heavy libraries are imported lazily to save memory on 512MB hosting
-# These are loaded on first use, not at startup
+# Split into 3 groups so each route only loads what it needs
 pd = None
 np = None
 plt = None
@@ -27,15 +27,20 @@ DataPipeline = None
 ModelTrainer = None
 DataCleaner = None
 
-def _load_ml_libs():
-    """Lazy-load heavy ML libraries on first use."""
-    global pd, np, plt, sns, DataPipeline, ModelTrainer, DataCleaner
+def _load_data_libs():
+    """Load only pandas + numpy (for upload/download routes)."""
+    global pd, np
     if pd is None:
         import pandas
         pd = pandas
     if np is None:
         import numpy
         np = numpy
+
+def _load_plot_libs():
+    """Load matplotlib + seaborn (only for plot generation)."""
+    global plt, sns
+    _load_data_libs()
     if plt is None:
         import matplotlib
         matplotlib.use('Agg')
@@ -44,11 +49,22 @@ def _load_ml_libs():
     if sns is None:
         import seaborn
         sns = seaborn
+
+def _load_pipeline_libs():
+    """Load data_pipeline (scikit-learn based - for processing/training)."""
+    global DataPipeline, ModelTrainer, DataCleaner
+    _load_data_libs()
     if DataPipeline is None:
         from data_pipeline import DataPipeline as _DP, ModelTrainer as _MT, DataCleaner as _DC
         DataPipeline = _DP
         ModelTrainer = _MT
         DataCleaner = _DC
+
+def _load_ml_libs():
+    """Load everything (backward compat)."""
+    _load_data_libs()
+    _load_plot_libs()
+    _load_pipeline_libs()
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -250,7 +266,7 @@ def fig_to_base64(fig):
 
 def generate_plots(df, target_col=None):
     """Generate EDA plots and return as base64 images."""
-    _load_ml_libs()
+    _load_plot_libs()
     plots = {}
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     
@@ -458,7 +474,7 @@ def dashboard():
 @jwt_required
 def upload_file():
     """Handle file upload."""
-    _load_ml_libs()
+    _load_data_libs()
     if 'file' not in request.files:
         return jsonify({'error': 'No file uploaded'}), 400
     
@@ -517,7 +533,7 @@ def upload_file():
 @jwt_required
 def process_data():
     """Process uploaded data through the pipeline."""
-    _load_ml_libs()
+    _load_pipeline_libs()
     try:
         data = request.json
         target_col = data.get('target_column')
@@ -663,7 +679,7 @@ def process_data():
 @jwt_required
 def view_dataset(dataset_id):
     """View a specific dataset."""
-    _load_ml_libs()
+    _load_data_libs()
     dataset = Dataset.query.get_or_404(dataset_id)
     
     # Ensure user owns this dataset
@@ -711,7 +727,7 @@ def view_dataset(dataset_id):
 @jwt_required
 def transform_dataset(dataset_id):
     """Apply data transformations."""
-    _load_ml_libs()
+    _load_pipeline_libs()
     dataset = Dataset.query.get_or_404(dataset_id)
     if dataset.user_id != g.current_user.id:
         return jsonify({'error': 'Access denied'}), 403
@@ -820,7 +836,7 @@ def transform_dataset(dataset_id):
 @jwt_required  
 def download_dataset(dataset_id, file_type):
     """Download dataset file."""
-    _load_ml_libs()
+    _load_data_libs()
     dataset = Dataset.query.get_or_404(dataset_id)
     
     if dataset.user_id != g.current_user.id:
@@ -980,7 +996,7 @@ def download_model_report(dataset_id):
 @jwt_required
 def train_model(dataset_id):
     """Train ML models on a dataset."""
-    _load_ml_libs()
+    _load_pipeline_libs()
     dataset = Dataset.query.get_or_404(dataset_id)
     
     if dataset.user_id != g.current_user.id:
@@ -1195,7 +1211,7 @@ def predict_demo():
     Does NOT require JWT auth to allow easy testing.
     Payload: { "model_type": "sales"|"student", "features": {...} }
     """
-    _load_ml_libs()
+    _load_data_libs()
     try:
         data = request.json
         model_type = data.get('model_type')
@@ -1300,7 +1316,7 @@ def get_user_model_info(dataset_id):
 @jwt_required
 def predict_user_model():
     """Predict using a user's trained model."""
-    _load_ml_libs()
+    _load_data_libs()
     try:
         data = request.json
         dataset_id = data.get('dataset_id')
@@ -1360,7 +1376,7 @@ def predict_user_model():
 @jwt_required
 def generate_synthetic(dataset_id):
     """Generate synthetic data based on the dataset."""
-    _load_ml_libs()
+    _load_data_libs()
     dataset = Dataset.query.get_or_404(dataset_id)
     if dataset.user_id != g.current_user.id:
         return jsonify({'error': 'Access denied'}), 403
@@ -1416,7 +1432,7 @@ def download_changes(filename):
 @jwt_required
 def evolve_features(dataset_id):
     """Automatically evolve features using interaction terms."""
-    _load_ml_libs()
+    _load_data_libs()
     dataset = Dataset.query.get_or_404(dataset_id)
     if dataset.user_id != g.current_user.id:
         return jsonify({'error': 'Access denied'}), 403
