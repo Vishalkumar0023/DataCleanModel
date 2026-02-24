@@ -15,8 +15,8 @@ from pathlib import Path
 
 from .data_loader import DataLoader
 from .data_cleaner import DataCleaner
-from .eda import EDAAnalyzer
-from .feature_engineer import FeatureEngineer
+# EDAAnalyzer and FeatureEngineer are imported lazily inside methods
+# to avoid loading matplotlib/seaborn/scipy at module import time
 from .model_trainer import ModelTrainer
 from .report_generator import ReportGenerator
 
@@ -41,8 +41,8 @@ class DataPipeline:
         """Initialize the data pipeline."""
         self.loader: Optional[DataLoader] = None
         self.cleaner: Optional[DataCleaner] = None
-        self.eda: Optional[EDAAnalyzer] = None
-        self.engineer: Optional[FeatureEngineer] = None
+        self.eda: Optional['EDAAnalyzer'] = None
+        self.engineer: Optional['FeatureEngineer'] = None
         self.trainer: Optional[ModelTrainer] = None
         
         self.raw_df: Optional[pd.DataFrame] = None
@@ -180,6 +180,7 @@ class DataPipeline:
         if target_col:
             self.target_col = target_col
         
+        from .eda import EDAAnalyzer
         self.eda = EDAAnalyzer(df, target_col=self.target_col)
         results = self.eda.run_full_analysis(
             show_plots=show_plots,
@@ -225,6 +226,7 @@ class DataPipeline:
         if problem_type:
             self.problem_type = problem_type
         
+        from .feature_engineer import FeatureEngineer
         self.engineer = FeatureEngineer(
             df, 
             target_col=self.target_col,
