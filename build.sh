@@ -4,7 +4,12 @@
 set -o errexit  # exit on error
 
 pip install --upgrade pip
-pip install --prefer-binary -r requirements.txt
+
+# Install heavy scientific packages as binary-only (no source compilation)
+pip install --only-binary=:all: numpy pandas scipy scikit-learn matplotlib
+
+# Install remaining lightweight packages
+pip install -r requirements.txt
 
 # Initialize the database
 python -c "
