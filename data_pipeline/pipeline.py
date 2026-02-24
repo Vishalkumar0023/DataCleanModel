@@ -6,6 +6,10 @@ Main orchestrator that combines all modules into a unified pipeline.
 
 import pandas as pd
 import numpy as np
+import os
+import io
+import json
+from datetime import datetime
 from typing import Optional, Dict, Any, List, Tuple
 from pathlib import Path
 
@@ -14,6 +18,7 @@ from .data_cleaner import DataCleaner
 from .eda import EDAAnalyzer
 from .feature_engineer import FeatureEngineer
 from .model_trainer import ModelTrainer
+from .report_generator import ReportGenerator
 
 
 class DataPipeline:
@@ -435,7 +440,7 @@ class DataPipeline:
         t_col = target_col or self.target_col
         p_type = problem_type or self.problem_type
         
-        self.trainer = ModelTrainer(df, target_col=t_col, problem_type=p_type)
+        self.trainer = ModelTrainer(df, target_col=t_col, problem_type=p_type, raw_df=self.raw_df)
         self.model_results = self.trainer.run()
         
         if export_path:
@@ -443,3 +448,97 @@ class DataPipeline:
         
         self.pipeline_report['model_training'] = self.model_results
         return self.model_results
+
+    def generate_html_report(self, output_path: str) -> str:
+        """
+        Generate a detailed HTML report using ReportGenerator.
+        """
+        generator = ReportGenerator(self, self.model_results)
+        html_content = generator.generate_html()
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+            
+        print(f"✅ Generated detailed HTML report: {output_path}")
+        return output_path
+
+    def generate_markdown_report(self, output_path: str) -> str:
+        """
+        Generate a comprehensive Markdown report of the pipeline run.
+        """
+        report = []
+        report.append(f"# Mini Data Clean Tool - Model Report")
+        report.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+
+        # 1. Dataset Overview
+        report.append("## 1. Data Processing Journey")
+        if self.raw_df is not None:
+             report.append(f"- **Raw Dataset:** {self.raw_df.shape[0]:,} rows × {self.raw_df.shape[1]} columns")
+        if self.cleaned_df is not None:
+             report.append(f"- **Cleaned Dataset:** {self.cleaned_df.shape[0]:,} rows × {self.cleaned_df.shape[1]} columns")
+        
+        # Pipeline Steps
+        if 'preprocessing' in self.pipeline_report:
+            report.append("\n### Cleaning Steps Executed:")
+            steps = self.pipeline_report['preprocessing'].get('steps_executed', [])
+            if steps:
+                for step in steps:
+                    report.append(f"- {step}")
+            else:
+                report.append("- No major cleaning issues found.")
+
+        # 2. Model Performance
+        report.append("\n## 2. Model Performance Analysis")
+        
+        if self.model_results and 'comparison' in self.model_results:
+            comp = self.model_results['comparison']
+            metric_name = comp.get('metric', 'Metric')
+            
+            report.append("| Model | Score | Reliability |")
+            report.append("| :--- | :--- | :--- |")
+            
+            # Raw Row
+            raw_score = comp.get('raw_score', 'N/A')
+            raw_rel = comp.get('raw_reliability', {})
+            raw_grade = raw_rel.get('grade', 'N/A')
+            raw_pts = raw_rel.get('score', 0)
+            report.append(f"| **Raw Baseline** | {raw_score}% ({metric_name}) | **{raw_grade}** ({raw_pts}/100) |")
+            
+            # Cleaned Row
+            clean_score = comp.get('cleaned_score', 'N/A')
+            # Get reliability from best model metadata or calculate
+            # For now, let's grab it from export metadata if available, or approximate
+            # Actually, model_trainer export includes it. 
+            # We can grab it from best_model dict if available
+            clean_grade = 'N/A'
+            clean_pts = 0
+            
+            # Try to dig reliability out of best model
+            # This is a bit tricky as it's not directly in comparison dict usually
+            # But we can look at reliability score if we re-calculated it or stored it
+            # The backend calc logic is in ModelTrainer.
+            # For the report sake, let's look at the 'model_training' specific section
+            best_model_info = self.model_results.get('best_model', {})
+            # We don't have reliability directly here unless we added it to the dict in ModelTrainer.run
+            # Let's check ModelTrainer.run output structure. 
+            # It returns 'best_model': {... 'metrics': ...}
+            # The 'reliability' key is in the *export*, not immediately in run return?
+            # Wait, line 832 in ModelTrainer adds 'reliability' to export.
+            # We should probably expose it in the main result dict too for easy access.
+            
+            report.append(f"| **Cleaned Model** | **{clean_score}%** ({metric_name}) | *(See Dashboard)* |")
+            
+            report.append(f"\n**Improvement:** {comp.get('improvement_pct', 0)}% improvement over baseline.")
+
+        # 3. Key Observations
+        report.append("\n## 3. Key Observations")
+        report.append("> This model report was generated automatically by the Mini Data Clean Tool.")
+        report.append(f"- **Target Variable:** `{self.target_col}`")
+        report.append(f"- **Problem Type:** `{self.problem_type}`")
+        
+        # Save
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(report))
+        
+        print(f"✅ Generated model report: {output_path}")
+        return output_path

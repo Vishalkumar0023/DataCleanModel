@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+env/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# App data (recreated on deploy)
+instance/
+user_data/
+uploads/
+output/
+demo_models/
+*.pkl
+
+# Logs
+*.log

@@ -27,8 +27,8 @@ from data_pipeline import DataPipeline, ModelTrainer, DataCleaner
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key-change-in-production'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///pipeline_users.db'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///pipeline_users.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 1 * 1024 * 1024 * 1024  # 1GB
 
@@ -571,6 +571,16 @@ def process_data():
         db.session.add(dataset)
         db.session.commit()
         
+        # Save raw data for model comparison
+        raw_filename = f"raw_{dataset.id}.csv"
+        raw_path = os.path.join(user_folder, raw_filename)
+        print(f"DEBUG: Saving raw data to {raw_path}, matches id {dataset.id}")
+        pipeline.raw_df.to_csv(raw_path, index=False)
+        if os.path.exists(raw_path):
+             print(f"DEBUG: Raw file created successfully: {os.path.getsize(raw_path)} bytes")
+        else:
+             print("DEBUG: Raw file creation FAILED")
+        
         # Save row changes to CSV for download
         row_changes_df = pd.DataFrame(cleaning_summary.get('row_changes', []))
         row_changes_filename = f"row_changes_{dataset.id}.csv"
@@ -839,28 +849,34 @@ def download_dataset(dataset_id, file_type):
 @app.route('/dataset/<int:dataset_id>/delete', methods=['POST'])
 @jwt_required
 def delete_dataset(dataset_id):
-    """Delete a dataset."""
+    """Delete a dataset and associated files."""
     dataset = Dataset.query.get_or_404(dataset_id)
-    
     if dataset.user_id != g.current_user.id:
         return jsonify({'error': 'Access denied'}), 403
-    
-    # Delete files
+        
     try:
-        if dataset.cleaned_path and os.path.exists(dataset.cleaned_path):
-            os.remove(dataset.cleaned_path)
-        if dataset.final_path and os.path.exists(dataset.final_path):
-            os.remove(dataset.final_path)
-        if dataset.model_path and os.path.exists(dataset.model_path):
-            os.remove(dataset.model_path)
-    except:
-        pass
-    
-    # Delete from database
-    db.session.delete(dataset)
-    db.session.commit()
-    
-    return jsonify({'success': True})
+        # Delete files
+        for path in [dataset.cleaned_path, dataset.final_path, dataset.model_path]:
+            if path and os.path.exists(path):
+                os.remove(path)
+                
+        # Also delete raw and report if exist
+        user_folder = get_user_folder(g.current_user.id)
+        raw_path = os.path.join(user_folder, f"raw_{dataset.id}.csv")
+        report_path = os.path.join(user_folder, f"model_report_{dataset.id}.md")
+        
+        if os.path.exists(raw_path): os.remove(raw_path)
+        if os.path.exists(report_path): os.remove(report_path)
+        
+        # HTML report
+        html_report = os.path.join(user_folder, f"model_report_{dataset.id}.html")
+        if os.path.exists(html_report): os.remove(html_report)
+
+        db.session.delete(dataset)
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/datasets')
@@ -886,6 +902,48 @@ def api_datasets():
 # ==============================================================================
 # MODEL TRAINING ROUTE
 # ==============================================================================
+
+@app.route('/dataset/<int:dataset_id>/report')
+@jwt_required
+def view_model_report(dataset_id):
+    """View the detailed HTML report in browser."""
+    dataset = Dataset.query.get_or_404(dataset_id)
+    if dataset.user_id != g.current_user.id:
+        return jsonify({'error': 'Access denied'}), 403
+        
+    user_folder = get_user_folder(g.current_user.id)
+    report_filename = f"model_report_{dataset.id}.html"
+    report_path = os.path.join(user_folder, report_filename)
+    
+    if not os.path.exists(report_path):
+        return jsonify({'error': 'Report not found. Please train a new model to generate it.'}), 404
+        
+    return send_file(report_path)
+
+@app.route('/dataset/<int:dataset_id>/download/report')
+@jwt_required
+def download_model_report(dataset_id):
+    """Download the auto-generated model report (HTML)."""
+    dataset = Dataset.query.get_or_404(dataset_id)
+    if dataset.user_id != g.current_user.id:
+        return jsonify({'error': 'Access denied'}), 403
+        
+    user_folder = get_user_folder(g.current_user.id)
+    # Prefer HTML report if available (it allows print to PDF)
+    html_filename = f"model_report_{dataset.id}.html"
+    html_path = os.path.join(user_folder, html_filename)
+    
+    if os.path.exists(html_path):
+         return send_file(html_path, as_attachment=True, download_name=html_filename)
+    
+    # Fallback to Markdown
+    report_filename = f"model_report_{dataset.id}.md"
+    report_path = os.path.join(user_folder, report_filename)
+    
+    if not os.path.exists(report_path):
+        return jsonify({'error': 'Report not found. Please train a new model to generate it.'}), 404
+        
+    return send_file(report_path, as_attachment=True, download_name=report_filename)
 
 @app.route('/dataset/<int:dataset_id>/train', methods=['POST'])
 @jwt_required
@@ -915,7 +973,17 @@ def train_model(dataset_id):
         model_filename = f'model_{dataset_id}_{timestamp}.pkl'
         model_path = os.path.join(user_folder, model_filename)
         
-        trainer = ModelTrainer(df, target_col=target_col, problem_type=problem_type)
+        # Load raw data for comparison
+        raw_filename = f"raw_{dataset_id}.csv"
+        raw_path = os.path.join(user_folder, raw_filename)
+        raw_df = None
+        if os.path.exists(raw_path):
+             try:
+                raw_df = pd.read_csv(raw_path)
+             except:
+                pass
+
+        trainer = ModelTrainer(df, target_col=target_col, problem_type=problem_type, raw_df=raw_df)
         # Use new comparison method
         results = trainer.run_full_comparison() 
         trainer.export_model(model_path)
@@ -929,6 +997,46 @@ def train_model(dataset_id):
             dataset.problem_type = trainer.problem_type
         db.session.commit()
         
+        # Generate Markdown Report
+        try:
+             # Rehydrate a pipeline object for reporting
+             # We iterate cleaning/engineering logs from DB
+             processed_log = json.loads(dataset.processing_log) if dataset.processing_log else {}
+             
+             dummy = DataPipeline()
+             dummy.target_col = trainer.target_col
+             dummy.problem_type = trainer.problem_type
+             dummy.raw_df = raw_df
+             dummy.cleaned_df = df # accessible as final/clean
+             dummy.model_results = results
+             
+             # improving list format
+             steps = []
+             if 'cleaning' in processed_log: steps.extend([f"Cleaning: {x}" for x in processed_log['cleaning']])
+             if 'feature_engineering' in processed_log: steps.extend([f"Feature Eng: {x}" for x in processed_log['feature_engineering']])
+             
+             dummy.pipeline_report = {
+                 'preprocessing': {
+                     'steps_executed': steps
+                 }
+             }
+             
+             report_filename = f'model_report_{dataset_id}.md'
+             report_path = os.path.join(user_folder, report_filename)
+             dummy.generate_markdown_report(report_path)
+             
+             # Also generate HTML detailed report
+             html_report_filename = f'model_report_{dataset_id}.html'
+             html_report_path = os.path.join(user_folder, html_report_filename)
+             dummy.generate_html_report(html_report_path)
+             
+             print(f"DEBUG: Generated reports at {report_path} and {html_report_path}")
+
+        except Exception as e:
+            print(f"Warning: Report generation failed: {e}")
+            import traceback
+            traceback.print_exc()
+
         return jsonify({
             'success': True,
             'results': results
@@ -1368,9 +1476,10 @@ def check_drift(dataset_id):
 
 
 if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 8080))
     print("=" * 60)
     print("DATA PIPELINE WEB APP (JWT Authentication)")
     print("=" * 60)
-    print("\n🌐 Open in browser: http://127.0.0.1:8080")
+    print(f"\n🌐 Open in browser: http://127.0.0.1:{port}")
     print("🔐 Auth: JWT tokens in HttpOnly cookies\n")
-    app.run(debug=True, host='127.0.0.1', port=8080)
+    app.run(debug=True, host='0.0.0.0', port=port)

@@ -7,6 +7,7 @@ cross-validation, hyperparameter tuning, explainability, and model export.
 
 import pandas as pd
 import numpy as np
+import time
 import joblib
 import re
 import warnings
@@ -75,9 +76,10 @@ class ModelTrainer:
         self,
         df: pd.DataFrame,
         target_col: Optional[str] = None,
-        problem_type: Optional[str] = None
+        problem_type: Optional[str] = None,
+        raw_df: Optional[pd.DataFrame] = None
     ):
-        self.original_df = df.copy()
+        self.original_df = raw_df.copy() if raw_df is not None else df.copy()
         self.df = df.copy()
         self.target_col = target_col
         self.problem_type = problem_type  # 'classification' or 'regression'
@@ -745,7 +747,7 @@ class ModelTrainer:
         return dashboard
 
     # ─── 10. Reliability Score ─────────────────────────────────────────
-    def get_reliability_score(self) -> Dict[str, Any]:
+    def _compute_reliability(self, n_rows: int, cv_std: float, metric_val: float) -> Dict[str, Any]:
         """
         Compute a 0–100 reliability score based on:
         - Dataset size (bigger = better)
@@ -756,16 +758,15 @@ class ModelTrainer:
         reasons = []
 
         # Dataset size factor (0–25 pts)
-        n = self.X.shape[0] if self.X is not None else len(self.df)
-        if n >= 10000:
+        if n_rows >= 10000:
             score += 25
             reasons.append("Large dataset (+25)")
-        elif n >= 1000:
-            pts = int(15 + (n - 1000) / 900 * 10)
+        elif n_rows >= 1000:
+            pts = int(15 + (n_rows - 1000) / 900 * 10)
             score += pts
             reasons.append(f"Medium dataset (+{pts})")
-        elif n >= 100:
-            pts = int(5 + (n - 100) / 900 * 10)
+        elif n_rows >= 100:
+            pts = int(5 + (n_rows - 100) / 900 * 10)
             score += pts
             reasons.append(f"Small dataset (+{pts})")
         else:
@@ -773,35 +774,30 @@ class ModelTrainer:
             reasons.append("Very small dataset (-15)")
 
         # CV variance factor (0–15 pts)
-        if self.best_metrics:
-            primary = 'f1_weighted' if self.problem_type == 'classification' else 'r2'
-            std = self.best_metrics.get(primary, {}).get('std', 0.1)
-            if std < 0.02:
-                score += 15
-                reasons.append("Very stable CV scores (+15)")
-            elif std < 0.05:
-                score += 10
-                reasons.append("Stable CV scores (+10)")
-            elif std < 0.1:
-                score += 5
-                reasons.append("Moderate CV variance (+5)")
-            else:
-                score -= 5
-                reasons.append("High CV variance (-5)")
+        # Use provided std dev
+        if cv_std < 0.02:
+            score += 15
+            reasons.append("Very stable CV scores (+15)")
+        elif cv_std < 0.05:
+            score += 10
+            reasons.append("Stable CV scores (+10)")
+        elif cv_std < 0.1:
+            score += 5
+            reasons.append("Moderate CV variance (+5)")
+        else:
+            score -= 5
+            reasons.append("High CV variance (-5)")
 
         # Metric quality factor (0–10 pts)
-        if self.best_metrics:
-            primary = 'f1_weighted' if self.problem_type == 'classification' else 'r2'
-            val = self.best_metrics.get(primary, {}).get('mean', 0)
-            if val >= 0.9:
-                score += 10
-                reasons.append("Excellent primary metric (+10)")
-            elif val >= 0.75:
-                score += 5
-                reasons.append("Good primary metric (+5)")
-            elif val < 0.5:
-                score -= 10
-                reasons.append("Poor primary metric (-10)")
+        if metric_val >= 0.9:
+            score += 10
+            reasons.append("Excellent primary metric (+10)")
+        elif metric_val >= 0.75:
+            score += 5
+            reasons.append("Good primary metric (+5)")
+        elif metric_val < 0.5:
+            score -= 10
+            reasons.append("Poor primary metric (-10)")
 
         score = max(0, min(100, score))
         return {
@@ -809,6 +805,20 @@ class ModelTrainer:
             'grade': 'A' if score >= 85 else 'B' if score >= 70 else 'C' if score >= 50 else 'D',
             'reasons': reasons
         }
+
+    def get_reliability_score(self) -> Dict[str, Any]:
+        """Wrapper for current model reliability."""
+        n = self.X.shape[0] if self.X is not None else len(self.df)
+        
+        primary = 'f1_weighted' if self.problem_type == 'classification' else 'r2'
+        std = 0.1
+        val = 0
+        
+        if self.best_metrics:
+            std = self.best_metrics.get(primary, {}).get('std', 0.1)
+            val = self.best_metrics.get(primary, {}).get('mean', 0)
+            
+        return self._compute_reliability(n, std, val)
 
     # ─── 11. Export ────────────────────────────────────────────────────
     def export_model(self, path: str) -> str:
@@ -841,6 +851,11 @@ class ModelTrainer:
         Strategy: 'Just Encoding' + Minimal Imputation (to prevent crash).
         """
         try:
+            if self.original_df is None:
+                msg = "Raw data not available for comparison"
+                self.log.append(msg)
+                return {"score": 0.0, "metrics": {}, "error": msg, "time_taken": 0, "memory_mb": 0}
+
             # work on a copy of original_df
             df = self.original_df.copy()
             
@@ -850,9 +865,19 @@ class ModelTrainer:
                 if ID_PATTERNS.match(col) or URL_PATTERNS.search(col):
                     df.drop(columns=[col], inplace=True)
             
-            # 2. Handle Target
+            # 2. Handle Target (and potential cleaning-renaming mismatch)
             if self.target_col not in df.columns:
-                return {} 
+                # Try case-insensitive match
+                col_map = {c.lower(): c for c in df.columns}
+                if self.target_col.lower() in col_map:
+                     found_col = col_map[self.target_col.lower()]
+                     df.rename(columns={found_col: self.target_col}, inplace=True)
+                     self.log.append(f"Mapped raw target '{found_col}' to '{self.target_col}'")
+                else:
+                    # Fail gracefully
+                    msg = f"Target '{self.target_col}' not found in raw data"
+                    self.log.append(msg)
+                    return {"score": 0.0, "metrics": {}, "error": msg, "time_taken": 0, "memory_mb": 0}
             
             y = df[self.target_col]
             X = df.drop(columns=[self.target_col])
@@ -901,31 +926,84 @@ class ModelTrainer:
             
             # Quick CV
             n_folds = 3
+            metrics = {}
             if self.problem_type == 'classification':
                 cv = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
+                scoring_dict = {
+                    'accuracy': 'accuracy',
+                    'precision': 'precision_weighted',
+                    'f1': 'f1_weighted'
+                }
             else:
                 cv = KFold(n_splits=n_folds, shuffle=True, random_state=42)
+                scoring_dict = {
+                    'r2': 'r2',
+                    'mae': 'neg_mean_absolute_error',
+                    'mse': 'neg_mean_squared_error'
+                }
                 
+            start_time = time.time()
             try:
-                cv_scores = cross_validate(pipeline, X, y, cv=cv, scoring=scoring)
-                mean_score = np.mean(cv_scores['test_score'])
+                cv_results = cross_validate(pipeline, X, y, cv=cv, scoring=scoring_dict)
+                for metric_name, scorer_name in scoring_dict.items():
+                    key = f"test_{metric_name}"
+                    if key in cv_results:
+                         score = np.mean(cv_results[key])
+                         if 'neg_' in scorer_name: score = -score
+                         metrics[metric_name] = round(score, 4)
+                
+                # Main score for comparison
+                main_metric = 'accuracy' if self.problem_type == 'classification' else 'r2'
+                mean_score = metrics.get(main_metric, 0)
+                
             except ValueError as ve:
-                # Fallback for very small datasets where cv=3 might fail
-                if "n_splits" in str(ve):
-                    model.fit(preprocessor.fit_transform(X, y), y)
-                    mean_score = model.score(preprocessor.transform(X), y)
-                else:
-                    raise ve
+                # Fallback for very small datasets
+                model.fit(preprocessor.fit_transform(X, y), y)
+                mean_score = model.score(preprocessor.transform(X), y)
+                metrics[main_metric] = round(mean_score, 4)
             
+            end_time = time.time()
+            time_taken = round(end_time - start_time, 4)
+            memory_mb = round(self.original_df.memory_usage(deep=True).sum() / (1024 * 1024), 2)
+            
+            # Calculate Reliability for Raw
+            # Dataset size
+            n_raw = len(df)
+            
+            # Std dev of primary metric
+            try:
+                if 'results' in locals() and results is not None:
+                    if self.problem_type == 'classification':
+                        raw_std = results['test_f1'].std()
+                        raw_val = results['test_f1'].mean()
+                    else:
+                        raw_std = results['test_r2'].std()
+                        raw_val = results['test_r2'].mean()
+                else:
+                     raise ValueError("Results not available")
+            except Exception:
+                # Fallback if CV failed or results missing
+                raw_std = 0.2  # Assume high variance
+                raw_val = mean_score
+
+            reliability = self._compute_reliability(n_raw, raw_std, raw_val)
+
             return {
                 "score": round(mean_score, 4),
-                "metric": scoring,
-                "model_type": "Decision Tree (Baseline)"
+                "metrics": metrics,
+                "model_type": "Decision Tree (Baseline)",
+                "time_taken": time_taken,
+                "memory_mb": memory_mb,
+                "reliability": reliability
             }
             
         except Exception as e:
+            print(f"DEBUG: Naive baseline failed: {e}")
+            print(f"DEBUG: Target: {self.target_col}")
+            if self.original_df is not None:
+                print(f"DEBUG: Columns: {self.original_df.columns.tolist()}")
             self.log.append(f"Naive baseline failed: {e}")
-            return {"score": 0.0, "error": str(e)}
+            return {"score": 0.0, "metrics": {}, "error": str(e), "time_taken": 0, "memory_mb": 0}
 
     def run_full_comparison(self) -> Dict[str, Any]:
         """
@@ -934,40 +1012,76 @@ class ModelTrainer:
         # 1. Train Naive
         naive_results = self.train_naive_baseline()
         
-        # 2. Run Advanced Pipeline
+        # 2. Run Advanced Pipeline (with timing)
+        start_adv = time.time()
         advanced_dashboard = self.run()
+        end_adv = time.time()
+        advanced_dashboard['time_taken'] = round(end_adv - start_adv, 4)
         
         # 3. Compare
         advanced_score = 0
+        advanced_metrics = {}
+        
+        # Calculate Advanced Stats
+        start_time_adv = time.time()
+        # (The 'run' method was already called above, so we can't truly measure it here unless we wrap 'self.run()'. 
+        # But 'self.run()' includes 'train_all_models' which logs time. 
+        # For this demo, let's assume Advanced takes slightly longer than Baseline + overhead due to search)
+        # We'll use a heuristic based on complexity or just measure overhead of this function call as proxy if 'run' isn't wrapped.
+        # BETTER: Let's assume 'run' took some time. We can't retroactively measure it easily without changing 'run'.
+        # Let's use a placeholder heuristic: Advanced Time = Baseline Time * 1.5 (Simulated for Demo effect as "Optimization" usually implies *better* result but *more* compute? 
+        # Actually user asked for "optimization like cpu time... by cleaned data".
+        # Let's calculate memory for cleaned df.
+        advanced_memory_mb = round(self.df.memory_usage(deep=True).sum() / (1024 * 1024), 2)
+        
+        # In a real app we'd time 'self.run()' properly. 
+        # Let's wrap 'self.run()' in the caller next time. For now, let's estimate advanced_time based on log entries or just use a random factor of baseline to show data.
+        # Wait, I can just measure 'time.time()' before and after 'self.run()' call in this method!
+        # Ah, 'self.run()' is called at line 958. I should have wrapped it there.
+        # I will replace the whole function to wrap 'self.run()' with timing.
+        
         if 'best_model' in advanced_dashboard and 'metrics' in advanced_dashboard['best_model']:
-            metrics = advanced_dashboard['best_model']['metrics']
-            # classification -> Accuracy or F1
-            # regression -> R2
+            all_metrics = advanced_dashboard['best_model']['metrics']
+            print(f"DEBUG: Available metrics keys: {list(all_metrics.keys())}")
+            for k, v in all_metrics.items():
+                if isinstance(v, dict) and 'mean' in v:
+                    # Normalize keys: backend might use 'f1_weighted', frontend wants 'f1'
+                    metric_key = k
+                    if k == 'f1_weighted': metric_key = 'f1'
+                    if k == 'precision_weighted': metric_key = 'precision'
+                    advanced_metrics[metric_key] = round(v['mean'], 4)
+            
             if self.problem_type == 'classification':
-                # Try accuracy first for direct comparison
-                if 'accuracy' in metrics:
-                    advanced_score = metrics['accuracy']['mean']
-                elif 'f1_weighted' in metrics:
-                    advanced_score = metrics['f1_weighted']['mean']
+                advanced_score = advanced_metrics.get('accuracy', 0)
             else:
-                if 'r2' in metrics:
-                    advanced_score = metrics['r2']['mean']
+                advanced_score = advanced_metrics.get('r2', 0)
         
         naive_score = naive_results.get('score', 0)
+        naive_metrics = naive_results.get('metrics', {})
         
         # Calculate Improvement
         improvement = 0
         if naive_score != 0:
             improvement = ((advanced_score - naive_score) / abs(naive_score)) * 100
         elif advanced_score > 0:
-            improvement = 100 # Infinite improvement
+            improvement = 100 
             
         # Add comparison to dashboard
         advanced_dashboard['comparison'] = {
             'raw_score': naive_score,
             'cleaned_score': advanced_score,
+            'raw_metrics': naive_metrics,
+            'cleaned_metrics': advanced_metrics,
             'improvement_pct': round(improvement, 1),
-            'metric': naive_results.get('metric', 'score')
+            'metric': 'Accuracy' if self.problem_type == 'classification' else 'R² Score',
+            'raw_error': naive_results.get('error'),
+            'raw_reliability': naive_results.get('reliability'),
+            'optimization': {
+                'raw_time': naive_results.get('time_taken', 0),
+                'cleaned_time': advanced_dashboard.get('time_taken', 0), # Will be set by wrapper
+                'raw_space': naive_results.get('memory_mb', 0),
+                'cleaned_space': advanced_memory_mb
+            }
         }
         
         return advanced_dashboard
