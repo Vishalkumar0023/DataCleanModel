@@ -897,8 +897,7 @@ class DataCleaner:
                     "reason": "Too much missing data to impute reliably."
                 })
             else:
-                dtype = self.df[col].dtype
-                method = "Median Imputation" if np.issubdtype(dtype, np.number) else "Mode Imputation"
+                method = "Median Imputation" if pd.api.types.is_numeric_dtype(self.df[col]) else "Mode Imputation"
                 suggestions.append({
                     "column": col,
                     "issue": f"{pct:.0%} missing values",
@@ -945,7 +944,7 @@ class DataCleaner:
         # ID Columns
         for col in self.df.columns:
             if col.lower() in ['id', 'uuid', 'guid', 'index'] or \
-               (self.df[col].nunique() == len(self.df) and self.df[col].dtype == 'object'):
+               (self.df[col].nunique() == len(self.df) and pd.api.types.is_string_dtype(self.df[col])):
                 suggestions.append({
                     "column": col,
                     "issue": "High cardinality / ID-like",
