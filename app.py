@@ -491,6 +491,13 @@ def upload_file():
         else:
             df = pd.read_excel(file)
         
+        # Convert pandas extension types to standard numpy types
+        for col in df.columns:
+            if hasattr(df[col].dtype, 'name') and df[col].dtype.name in ('string', 'String'):
+                df[col] = df[col].astype('object')
+            elif hasattr(df[col].dtype, 'numpy_dtype'):
+                df[col] = df[col].astype(df[col].dtype.numpy_dtype)
+        
         # Save to user folder
         user_folder = get_user_folder(g.current_user.id)
         temp_path = os.path.join(user_folder, 'temp_upload.csv')

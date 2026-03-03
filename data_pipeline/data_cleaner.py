@@ -26,6 +26,15 @@ class DataCleaner:
             Input DataFrame to clean
         """
         self.df = df.copy()
+        # Convert pandas extension types (StringDtype, nullable Int/Float)
+        # to standard numpy dtypes for compatibility with numpy/sklearn
+        for col in self.df.columns:
+            if pd.api.types.is_string_dtype(self.df[col]) and self.df[col].dtype != 'object':
+                self.df[col] = self.df[col].astype('object')
+            elif pd.api.types.is_integer_dtype(self.df[col]) and hasattr(self.df[col].dtype, 'numpy_dtype'):
+                self.df[col] = self.df[col].astype(self.df[col].dtype.numpy_dtype)
+            elif pd.api.types.is_float_dtype(self.df[col]) and hasattr(self.df[col].dtype, 'numpy_dtype'):
+                self.df[col] = self.df[col].astype(self.df[col].dtype.numpy_dtype)
         self.original_shape = df.shape
         self.cleaning_log: List[str] = []
         self.transformations: List[Dict[str, Any]] = []
