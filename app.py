@@ -17,6 +17,8 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 
 import jwt as pyjwt
+from dataframe_compat import normalize_string_columns
+from upload_claim import claim_temp_upload
 
 # Heavy libraries are imported lazily to save memory on 512MB hosting
 # Split into groups so each route only loads what it needs
@@ -461,6 +463,15 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/healthz')
+def healthcheck():
+    """Small public endpoint for Render and the external keep-awake ping."""
+    return jsonify({
+        'status': 'ok',
+        'timestamp': datetime.now(timezone.utc).isoformat()
+    }), 200
+
+
 @app.route('/dashboard')
 @jwt_required
 def dashboard():
@@ -491,11 +502,11 @@ def upload_file():
         else:
             df = pd.read_excel(file)
         
-        # Convert pandas extension types to standard numpy types
+        # Pandas 3 infers text as ``str``, which rejects later numeric writes.
+        # The cleaning/model paths intentionally perform those conversions.
+        normalize_string_columns(df)
         for col in df.columns:
-            if hasattr(df[col].dtype, 'name') and df[col].dtype.name in ('string', 'String'):
-                df[col] = df[col].astype('object')
-            elif hasattr(df[col].dtype, 'numpy_dtype'):
+            if hasattr(df[col].dtype, 'numpy_dtype'):
                 df[col] = df[col].astype(df[col].dtype.numpy_dtype)
         
         # Save to user folder
@@ -540,8 +551,9 @@ def upload_file():
 def process_data():
     """Process uploaded data through the pipeline."""
     _load_pipeline_libs()
+    claimed_upload_path = None
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
         target_col = data.get('target_column')
         problem_type = data.get('problem_type', 'regression')
         dataset_name = data.get('dataset_name', 'Untitled Dataset')
@@ -550,13 +562,21 @@ def process_data():
         # Load from user's temp file
         user_folder = get_user_folder(g.current_user.id)
         temp_path = os.path.join(user_folder, 'temp_upload.csv')
-        
-        if not os.path.exists(temp_path):
-            return jsonify({'error': 'No file uploaded. Please upload a file first.'}), 400
+
+        # Claim the upload before starting the expensive pipeline. The atomic
+        # rename ensures a second /process request cannot process the same file.
+        claimed_upload_path = claim_temp_upload(temp_path)
+        if claimed_upload_path is None:
+            return jsonify({
+                'error': (
+                    'This upload is already being processed or was already processed. '
+                    'Upload the file again to process it.'
+                )
+            }), 409
         
         # Run pipeline
         pipeline = DataPipeline()
-        pipeline.load(temp_path)
+        pipeline.load(claimed_upload_path)
         
         # Validate
         validation = pipeline.validate()
@@ -582,7 +602,7 @@ def process_data():
             feature_summary = pipeline.engineer.get_summary() if pipeline.engineer else {}
         
         # Save results with unique names
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
         cleaned_filename = f'cleaned_{timestamp}.csv'
         final_filename = f'final_{timestamp}.csv'
         
@@ -645,9 +665,6 @@ def process_data():
         # Generate plots
         plots = generate_plots(pipeline.cleaned_df, target_col)
         
-        # Remove temp file
-        os.remove(temp_path)
-        
         return jsonify({
             'success': True,
             'dataset_id': dataset.id,
@@ -679,6 +696,12 @@ def process_data():
         print(f"Process error: {e}")
         print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
+    finally:
+        if claimed_upload_path and os.path.exists(claimed_upload_path):
+            try:
+                os.remove(claimed_upload_path)
+            except OSError as cleanup_error:
+                print(f"Could not remove processing upload: {cleanup_error}")
 
 
 @app.route('/dataset/<int:dataset_id>')

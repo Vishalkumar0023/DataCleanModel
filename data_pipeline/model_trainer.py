@@ -30,6 +30,7 @@ from sklearn.metrics import (
     r2_score, mean_absolute_error, mean_squared_error,
     classification_report, make_scorer
 )
+from dataframe_compat import normalize_string_columns
 
 HAS_XGBOOST = False  # Disabled for memory optimization
 
@@ -76,8 +77,10 @@ class ModelTrainer:
         problem_type: Optional[str] = None,
         raw_df: Optional[pd.DataFrame] = None
     ):
-        self.original_df = raw_df.copy() if raw_df is not None else df.copy()
-        self.df = df.copy()
+        self.original_df = normalize_string_columns(
+            raw_df.copy() if raw_df is not None else df.copy()
+        )
+        self.df = normalize_string_columns(df.copy())
         self.target_col = target_col
         self.problem_type = problem_type  # 'classification' or 'regression'
         self.warnings: List[str] = []

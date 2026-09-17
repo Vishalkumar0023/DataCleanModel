@@ -1,0 +1,25 @@
+name: Keep Render service awake
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping-healthcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the Render health endpoint
+        env:
+          RENDER_HEALTHCHECK_URL: ${{ secrets.RENDER_HEALTHCHECK_URL }}
+        run: |
+          if [ -z "$RENDER_HEALTHCHECK_URL" ]; then
+            echo "Skipped: add the RENDER_HEALTHCHECK_URL repository secret first."
+            exit 0
+          fi
+          curl --fail --show-error --silent --location \
+            --retry 3 --retry-all-errors --max-time 120 \
+            "$RENDER_HEALTHCHECK_URL"

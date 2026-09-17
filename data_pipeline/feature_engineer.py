@@ -13,6 +13,7 @@ from sklearn.preprocessing import (
 )
 from sklearn.feature_selection import VarianceThreshold, mutual_info_classif, mutual_info_regression
 import warnings
+from dataframe_compat import normalize_string_columns
 
 warnings.filterwarnings('ignore')
 
@@ -38,7 +39,7 @@ class FeatureEngineer:
         problem_type : str, optional
             'classification', 'regression', or None
         """
-        self.df = df.copy()
+        self.df = normalize_string_columns(df.copy())
         self.target_col = target_col
         self.problem_type = problem_type
         self.transformations: List[str] = []

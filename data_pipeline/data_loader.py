@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from typing import Union, Optional, Dict, Any
+from dataframe_compat import normalize_string_columns
 
 
 class DataLoader:
@@ -46,7 +47,7 @@ class DataLoader:
         else:
             raise ValueError(f"Unsupported source type: {type(source)}")
         
-        return self.df
+        return normalize_string_columns(self.df)
     
     def _load_from_file(self, file_path: str, **kwargs) -> pd.DataFrame:
         """Load data from file based on extension."""

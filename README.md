@@ -191,6 +191,19 @@ The pipeline produces:
 - **Regression**: Continuous target analysis
 - **Clustering**: Unsupervised data preparation
 
+## Render deployment
+
+The app exposes `GET /healthz` for Render health checks. To stop a Free Render
+web service from idling, the included GitHub Actions workflow pings this
+endpoint every five minutes.
+
+In the GitHub repository, add an Actions secret named `RENDER_HEALTHCHECK_URL`
+with your deployed URL, for example
+`https://your-service.onrender.com/healthz`. The workflow skips safely until
+that secret is configured. A free Render web service otherwise spins down after
+15 minutes without inbound traffic; an in-process timer cannot wake it once it
+has stopped.
+
 ## 📝 License
 
 MIT License - Feel free to use and modify.

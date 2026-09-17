@@ -11,6 +11,7 @@ from typing import Optional, Dict, List, Any, Union
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, LabelEncoder, OneHotEncoder
 from sklearn.feature_selection import VarianceThreshold
 import re
+from dataframe_compat import normalize_string_columns
 
 
 class DataCleaner:
@@ -25,13 +26,11 @@ class DataCleaner:
         df : pd.DataFrame
             Input DataFrame to clean
         """
-        self.df = df.copy()
-        # Convert pandas extension types (StringDtype, nullable Int/Float)
-        # to standard numpy dtypes for compatibility with numpy/sklearn
+        self.df = normalize_string_columns(df.copy())
+        # Convert nullable integer/float extension types to standard NumPy
+        # dtypes for compatibility with NumPy/scikit-learn.
         for col in self.df.columns:
-            if pd.api.types.is_string_dtype(self.df[col]) and self.df[col].dtype != 'object':
-                self.df[col] = self.df[col].astype('object')
-            elif pd.api.types.is_integer_dtype(self.df[col]) and hasattr(self.df[col].dtype, 'numpy_dtype'):
+            if pd.api.types.is_integer_dtype(self.df[col]) and hasattr(self.df[col].dtype, 'numpy_dtype'):
                 self.df[col] = self.df[col].astype(self.df[col].dtype.numpy_dtype)
             elif pd.api.types.is_float_dtype(self.df[col]) and hasattr(self.df[col].dtype, 'numpy_dtype'):
                 self.df[col] = self.df[col].astype(self.df[col].dtype.numpy_dtype)
@@ -602,7 +601,10 @@ class DataCleaner:
             columns = []
             for col in self.df.select_dtypes(include=['object', 'string']).columns:
                 # Sample check
-                sample = self.df[col].dropna().astype(str).sample(min(20, len(self.df)), random_state=42)
+                # Keep an object dtype: pandas 3's ``astype(str)`` creates a
+                # strict Arrow-backed string array, whose regex engine rejects
+                # some valid Python regex escapes used below.
+                sample = self.df[col].dropna().astype('object').sample(min(20, len(self.df)), random_state=42)
                 if sample.str.contains(r'[\$\€\£\,kKmMbB]').any() and sample.str.contains(r'\d').all():
                     columns.append(col)
 
@@ -615,7 +617,10 @@ class DataCleaner:
             original_nans = self.df[col].isna().sum()
             
             # Work on a copy
-            series = self.df[col].astype(str).str.strip()
+            # Do not use ``astype(str)`` here. In pandas 3 it creates the
+            # strict ``str`` dtype, which can reject later non-string writes
+            # and uses Arrow's more limited regex implementation.
+            series = self.df[col].astype('object').str.strip()
             
             if remove_symbols:
                 # Remove typical currency symbols and commas

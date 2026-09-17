@@ -5,7 +5,8 @@ PyJWT
 Werkzeug
 gunicorn
 
-pandas
+# Supports pandas 3's strict string dtype while avoiding untested future majors.
+pandas>=2.2,<3.1
 numpy
 scikit-learn
 matplotlib
